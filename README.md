@@ -35,7 +35,7 @@ Biblioteca em Go para validação end-to-end de programas G-code através de int
 - ✅ **Parser Determinístico** - Converte G-code em instruções estruturadas
 - ✅ **Interpretador de Estado** - Simula o comportamento lógico da máquina CNC
 - ✅ **Modelo Semântico** - Identifica furos, ranhuras e contornos automaticamente
-- ⏳ **API de Assertions** - Interface fluente para validações (em desenvolvimento)
+- ✅ **API de Assertions** - Interface fluente para validações estilo Playwright
 - ⏳ **Sistema de Snapshots** - Testes baseados em snapshots para CI/CD (planejado)
 - ⏳ **Renderização Visual** - Debug visual opcional (planejado)
 
@@ -235,6 +235,117 @@ Furo 1:
 ✅ Nenhum aviso detectado
 ```
 
+### Assertion API
+
+O pacote `assert` fornece uma API fluente para validar modelos de usinagem em testes automatizados. A API é inspirada no Playwright, permitindo encadeamento de assertions com mensagens de erro descritivas.
+
+**Exemplo básico com `testing.T`:**
+
+```go
+package mytest
+
+import (
+    "testing"
+    "github.com/eduardotorresdev/gocode-check/pkg/assert"
+    "github.com/eduardotorresdev/gocode-check/pkg/interpreter"
+    "github.com/eduardotorresdev/gocode-check/pkg/machining"
+)
+
+func TestGCodeProgram(t *testing.T) {
+    // Parse e interpreta o G-code
+    gcode := `
+        G21
+        G90
+        T1
+        G0 X50 Y50 Z5
+        G1 Z-10 F100
+    `
+    trace, err := interpreter.ParseAndInterpret(gcode)
+    if err != nil {
+        t.Fatalf("parse error: %v", err)
+    }
+    
+    // Analisa e gera modelo de usinagem
+    model, _ := machining.Analyze(trace)
+    
+    // Valida o modelo com assertions fluentes
+    assert.Expect(model).
+        HasHole(50, 50).
+        WithDiameter(6.0).
+        WithDepth(15.0).
+        Assert(t)
+}
+```
+
+**Assertions encadeadas:**
+
+```go
+// Validar furo com múltiplos critérios
+assert.Expect(model).
+    HasHole(50, 50).
+    WithDiameter(6.0).
+    WithDepth(15.0).
+    WithTool(1).
+    Assert(t)
+
+// Validar contorno fechado
+assert.Expect(model).
+    HasContour().
+    IsClosed().
+    HasSegmentCount(4).
+    Assert(t)
+
+// Múltiplas validações com And()
+assert.Expect(model).
+    HasHoleCount(3).
+    And().
+    HasSlotCount(1).
+    And().
+    HasContour().IsClosed().
+    Assert(t)
+```
+
+**Validar limites da peça:**
+
+```go
+bounds := assert.Bounds{
+    MinX: 0, MaxX: 100,
+    MinY: 0, MaxY: 100,
+    MinZ: -20, MaxZ: 10,
+}
+assert.Expect(model).NoOperationOutside(bounds).Assert(t)
+```
+
+**Tolerância customizada:**
+
+```go
+// Usa tolerância personalizada para comparações
+assert.ExpectWithTolerance(model, 0.001).
+    HasHole(50.001, 50.001).
+    Assert(t)
+```
+
+**Assertions disponíveis:**
+
+| Categoria | Assertion | Descrição |
+|-----------|-----------|-----------|
+| **Holes** | `HasHole(x, y)` | Verifica existência de furo na posição |
+| | `HasHoleCount(n)` | Verifica quantidade total de furos |
+| | `WithDiameter(d)` | Filtra furos por diâmetro |
+| | `WithDepth(d)` | Filtra furos por profundidade |
+| | `WithTool(t)` | Filtra furos por ferramenta |
+| **Slots** | `HasSlot(x1, y1, x2, y2)` | Verifica existência de ranhura |
+| | `HasSlotCount(n)` | Verifica quantidade total de ranhuras |
+| | `WithWidth(w)` | Filtra ranhuras por largura |
+| | `WithSlotDepth(d)` | Filtra ranhuras por profundidade |
+| **Contours** | `HasContour()` | Verifica existência de contorno |
+| | `HasContourCount(n)` | Verifica quantidade total de contornos |
+| | `IsClosed()` | Filtra contornos fechados |
+| | `IsOpen()` | Filtra contornos abertos |
+| | `HasSegmentCount(n)` | Filtra por quantidade de segmentos |
+| **Bounds** | `NoOperationOutside(bounds)` | Verifica se todas as operações estão dentro dos limites |
+| **Utility** | `And()` | Reinicia contexto para nova cadeia de assertions |
+
 ### Configuração
 
 A biblioteca permite configuração personalizada através do pacote `config`:
@@ -330,7 +441,8 @@ A biblioteca segue uma arquitetura em camadas, onde cada camada transforma a inf
 └────────┬───────────────────────────┘
          ↓
 ┌────────────────────────────────────┐
-│  Assertion API (futuro)            │
+│  Assertion API                     │
+│  pkg/assert                        │
 │  Validações fluentes               │
 └────────┬───────────────────────────┘
          ↓
@@ -349,6 +461,7 @@ gocode-check/
 ├── internal/
 │   └── config/          # Configurações globais e opções
 └── pkg/                 # API pública da biblioteca
+    ├── assert/          # API fluente de assertions
     ├── parser/          # Parser determinístico de G-code
     ├── interpreter/     # Simulador de estado da CNC
     └── machining/       # Análise semântica de usinagem
@@ -590,16 +703,16 @@ Consulte [ROADMAP.md](ROADMAP.md) para o planejamento completo e detalhado.
 | Fase 1 | Parser de G-code | ✅ Completo |
 | Fase 2 | Interpreter (core headless) | ✅ Completo |
 | Fase 3 | Machining Model | ✅ Completo |
-| Fase 4 | Assertion API | ⏳ Planejado |
+| Fase 4 | Assertion API | ✅ Completo |
 | Fase 5 | Snapshot Engine | ⏳ Planejado |
 | Fase 6 | UI Renderer | ⏳ Planejado |
 | Fase 7 | Tooling e DX | ⏳ Planejado |
 | Fase 8 | CI/CD e Releases | ⏳ Planejado |
 
 **Próximos passos:**
-- Implementar API de assertions fluente (Fase 4)
 - Desenvolver sistema de snapshots para testes (Fase 5)
 - Adicionar renderização visual opcional (Fase 6)
+- Melhorar ferramentas e DX (Fase 7)
 
 ---
 
