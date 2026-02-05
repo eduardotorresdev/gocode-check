@@ -99,7 +99,7 @@ func (p *Parser) parseLine(line string, lineNum int) ([]Instruction, error) {
 	mMatches := mCodePattern.FindAllStringSubmatch(upperLine, -1)
 	for _, match := range mMatches {
 		code, _ := strconv.Atoi(match[1])
-		instr := p.parseMCode(code, line, lineNum)
+		instr := p.parseMCode(code, upperLine, line, lineNum)
 		instructions = append(instructions, *instr)
 	}
 
@@ -152,13 +152,15 @@ func (p *Parser) parseGCode(code int, upperLine, rawLine string, lineNum int) (*
 }
 
 // parseMCode parses an M code instruction.
-func (p *Parser) parseMCode(code int, rawLine string, lineNum int) *Instruction {
+func (p *Parser) parseMCode(code int, upperLine, rawLine string, lineNum int) *Instruction {
 	instr := &Instruction{
 		Op:         OpM,
 		RawLine:    rawLine,
 		LineNumber: lineNum,
 	}
 	instr.Params.SetCode(code)
+	// Parse parameters (e.g., S for spindle speed with M3/M4)
+	p.parseParams(&instr.Params, upperLine)
 	return instr
 }
 
