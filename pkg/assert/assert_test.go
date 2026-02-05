@@ -578,7 +578,7 @@ G1 Z-10 F100`
 	model := modelFromGCode(t, gcode)
 	mock := &mockT{}
 
-	Expect(model).HasHole(50, 50).Assert(mock)
+	_ = Expect(model).HasHole(50, 50).Assert(mock)
 
 	if len(mock.errors) > 0 {
 		t.Error("expected no errors for passing assertion")
@@ -595,7 +595,7 @@ G1 Z-10 F100`
 	model := modelFromGCode(t, gcode)
 	mock := &mockT{}
 
-	Expect(model).HasHole(100, 100).Assert(mock)
+	_ = Expect(model).HasHole(100, 100).Assert(mock)
 
 	if len(mock.errors) == 0 {
 		t.Error("expected error for failing assertion")
@@ -615,7 +615,7 @@ G1 Z-10 F100`
 	model := modelFromGCode(t, gcode)
 	mock := &mockT{}
 
-	Expect(model).HasHole(100, 100).AssertFatal(mock)
+	_ = Expect(model).HasHole(100, 100).AssertFatal(mock)
 
 	if !mock.fatal {
 		t.Error("AssertFatal should call Fatalf")
@@ -632,7 +632,7 @@ G1 Z-10 F100`
 	model := modelFromGCode(t, gcode)
 	mock := &mockT{}
 
-	Expect(model).HasHole(100, 100).Must(mock)
+	_ = Expect(model).HasHole(100, 100).Must(mock)
 
 	if !mock.fatal {
 		t.Error("Must should call Fatalf")
@@ -706,24 +706,24 @@ M30`
 	// - 1 plunge at the start of the slot operation
 	// - 1 plunge at the start of the contour operation
 	// This behavior is documented in the machining package.
-	Expect(model).
+	_ = Expect(model).
 		HasHoleCount(5).
 		Assert(t)
 
-	Expect(model).
+	_ = Expect(model).
 		HasSlotCount(1).
 		Assert(t)
 
-	Expect(model).
+	_ = Expect(model).
 		HasContour().
 		IsClosed().
 		HasSegmentCount(3). // Triangle has 3 sides
 		Assert(t)
 
 	// Verify specific hole positions
-	Expect(model).HasHole(10, 10).Assert(t)
-	Expect(model).HasHole(30, 10).Assert(t)
-	Expect(model).HasHole(50, 10).Assert(t)
+	_ = Expect(model).HasHole(10, 10).Assert(t)
+	_ = Expect(model).HasHole(30, 10).Assert(t)
+	_ = Expect(model).HasHole(50, 10).Assert(t)
 
 	// Verify bounds
 	bounds := Bounds{
@@ -731,7 +731,7 @@ M30`
 		MinY: 0, MaxY: 200,
 		MinZ: -20, MaxZ: 10,
 	}
-	Expect(model).NoOperationOutside(bounds).Assert(t)
+	_ = Expect(model).NoOperationOutside(bounds).Assert(t)
 }
 
 // --- Benchmarks ---
@@ -748,7 +748,7 @@ G1 Z-10 F100`
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		Expect(model).HasHole(50, 50)
+		_ = Expect(model).HasHole(50, 50)
 	}
 }
 
@@ -764,7 +764,7 @@ G1 Z-10 F100`
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		Expect(model).
+		_ = Expect(model).
 			HasHole(50, 50).
 			WithDiameter(6.0).
 			WithDepth(15.0).

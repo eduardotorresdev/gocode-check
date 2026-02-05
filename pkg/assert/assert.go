@@ -117,7 +117,7 @@ func (a *Assertion) HasHole(x, y float64) *Assertion {
 		a.addError("no hole found at position (%.4f, %.4f)", x, y)
 		// Provide helpful info about existing holes
 		if len(a.model.Holes) > 0 {
-			a.errors[len(a.errors)-1] += fmt.Sprintf("\n  Available holes:")
+			a.errors[len(a.errors)-1] += "\n  Available holes:"
 			for i, h := range a.model.Holes {
 				a.errors[len(a.errors)-1] += fmt.Sprintf("\n    [%d] at (%.4f, %.4f), diameter=%.4f, depth=%.4f",
 					i, h.Center.X, h.Center.Y, h.Diameter, h.Depth)
@@ -167,7 +167,7 @@ func (a *Assertion) WithDiameter(diameter float64) *Assertion {
 	if len(filtered) == 0 {
 		a.addError("no hole with diameter %.4f found", diameter)
 		if len(a.filteredHoles) > 0 {
-			a.errors[len(a.errors)-1] += fmt.Sprintf("\n  Available diameters:")
+			a.errors[len(a.errors)-1] += "\n  Available diameters:"
 			for _, h := range a.filteredHoles {
 				a.errors[len(a.errors)-1] += fmt.Sprintf(" %.4f", h.Diameter)
 			}
@@ -198,7 +198,7 @@ func (a *Assertion) WithDepth(depth float64) *Assertion {
 	if len(filtered) == 0 {
 		a.addError("no hole with depth %.4f found", depth)
 		if len(a.filteredHoles) > 0 {
-			a.errors[len(a.errors)-1] += fmt.Sprintf("\n  Available depths:")
+			a.errors[len(a.errors)-1] += "\n  Available depths:"
 			for _, h := range a.filteredHoles {
 				a.errors[len(a.errors)-1] += fmt.Sprintf(" %.4f", h.Depth)
 			}
@@ -229,7 +229,7 @@ func (a *Assertion) WithTool(tool int) *Assertion {
 	if len(filtered) == 0 {
 		a.addError("no hole with tool %d found", tool)
 		if len(a.filteredHoles) > 0 {
-			a.errors[len(a.errors)-1] += fmt.Sprintf("\n  Available tools:")
+			a.errors[len(a.errors)-1] += "\n  Available tools:"
 			for _, h := range a.filteredHoles {
 				a.errors[len(a.errors)-1] += fmt.Sprintf(" %d", h.Tool)
 			}
@@ -265,7 +265,7 @@ func (a *Assertion) HasSlot(startX, startY, endX, endY float64) *Assertion {
 	if len(found) == 0 {
 		a.addError("no slot found from (%.4f, %.4f) to (%.4f, %.4f)", startX, startY, endX, endY)
 		if len(a.model.Slots) > 0 {
-			a.errors[len(a.errors)-1] += fmt.Sprintf("\n  Available slots:")
+			a.errors[len(a.errors)-1] += "\n  Available slots:"
 			for i, s := range a.model.Slots {
 				a.errors[len(a.errors)-1] += fmt.Sprintf("\n    [%d] from (%.4f, %.4f) to (%.4f, %.4f), length=%.4f",
 					i, s.Start.X, s.Start.Y, s.End.X, s.End.Y, s.Length())
@@ -448,7 +448,7 @@ func (a *Assertion) HasSegmentCount(expected int) *Assertion {
 	if len(filtered) == 0 {
 		a.addError("no contour with %d segments found", expected)
 		if len(a.filteredContours) > 0 {
-			a.errors[len(a.errors)-1] += fmt.Sprintf("\n  Available segment counts:")
+			a.errors[len(a.errors)-1] += "\n  Available segment counts:"
 			for _, c := range a.filteredContours {
 				a.errors[len(a.errors)-1] += fmt.Sprintf(" %d", len(c.Segments))
 			}
