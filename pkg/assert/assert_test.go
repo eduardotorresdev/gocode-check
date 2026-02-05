@@ -700,8 +700,14 @@ M30`
 	model := modelFromGCode(t, gcode)
 
 	// Verify all features exist
+	// Note: The analyzer detects plunge cuts (vertical moves from positive to negative Z)
+	// as holes. This includes:
+	// - 3 explicit drill holes at (10,10), (30,10), (50,10)
+	// - 1 plunge at the start of the slot operation
+	// - 1 plunge at the start of the contour operation
+	// This behavior is documented in the machining package.
 	Expect(model).
-		HasHoleCount(5). // 3 drill + 1 slot entry + 1 contour entry
+		HasHoleCount(5).
 		Assert(t)
 
 	Expect(model).
