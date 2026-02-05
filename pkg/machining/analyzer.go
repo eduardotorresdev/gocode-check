@@ -86,7 +86,7 @@ func (a *Analyzer) detectHoles(trace *interpreter.ExecutionTrace) {
 	events := trace.Events
 	currentTool := 0
 
-	for i, event := range events {
+	for _, event := range events {
 		if event.Type == interpreter.EventToolChange {
 			currentTool = event.Tool
 			continue
@@ -137,8 +137,6 @@ func (a *Analyzer) detectHoles(trace *interpreter.ExecutionTrace) {
 				event.SourceLine,
 			))
 		}
-
-		_ = i // Silence unused variable warning
 	}
 }
 
