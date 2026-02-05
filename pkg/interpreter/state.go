@@ -138,6 +138,8 @@ func NewMachineState() *MachineState {
 }
 
 // Clone creates a deep copy of the machine state.
+// Note: Position is a value type (struct with float64 fields) and is copied by value.
+// If Position becomes a pointer type in the future, this method needs to be updated.
 func (s *MachineState) Clone() *MachineState {
 	clone := *s
 	if s.Tool != nil {

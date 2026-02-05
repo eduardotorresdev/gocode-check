@@ -1,227 +1,294 @@
 # gocode-check
 
-gocode-check é uma biblioteca em Go para validação end-to-end de G-code.
-Ela interpreta G-code como uma CNC lógica, gera um modelo semântico de usinagem
-e permite asserts, snapshots e inspeção visual opcional — sem depender de máquina real.
+Biblioteca em Go para validação end-to-end de G-code.
 
-## Princípio central
+---
 
-A validação não depende da UI.
-A UI é apenas uma forma de visualizar o mesmo estado interno.
+## O que é
 
-- core 100% headless
+gocode-check é uma biblioteca que interpreta G-code como uma CNC lógica, gerando um modelo semântico de usinagem que permite validação automatizada sem depender de máquina real.
+
+**Características principais:**
+- Parser determinístico de G-code
+- Interpretador de estado da máquina CNC
+- Modelo semântico de usinagem
+- API de assertions fluente (inspirada no Playwright)
+- Sistema de snapshots para CI/CD
+- Renderização opcional para debug visual
+
+## Propósito
+
+Permitir testes end-to-end de programas G-code de forma:
+- **Determinística** - mesma entrada sempre produz mesma saída
+- **Reprodutível** - funciona igual em qualquer ambiente
+- **Automatizada** - integração nativa com CI/CD
+- **Independente** - não requer CNC real
+
+### Princípio Central
+
+> A validação não depende da UI. A UI é apenas uma forma de visualizar o mesmo estado interno.
+
+- Core 100% headless
 - UI consome o mesmo modelo
-- snapshot é serialização determinística do estado
+- Snapshot é serialização determinística do estado
 
-## Arquitetura
+---
 
-Pacote: gocode-check
+## Como Usar
 
-Camadas (ordem obrigatória):
+### Instalação
 
-1. Parser
-2. Interpreter (estado da máquina)
-3. Machining Model (semântica)
-4. Assertion API
-5. Snapshot Engine
-6. UI Renderer (opcional)
+```bash
+go get github.com/eduardotorresdev/gocode-check
+```
 
-## Parser
+### Exemplo Básico
 
-Responsabilidade:
-Converter string G-code em instruções semânticas mínimas.
+```go
+package main
 
-Características:
-- sem IO
-- sem tempo
-- sem aleatoriedade
+import (
+    "fmt"
+    "github.com/eduardotorresdev/gocode-check/pkg/parser"
+    "github.com/eduardotorresdev/gocode-check/pkg/interpreter"
+)
 
-Input:
-- string
+func main() {
+    // 1. Parse G-code
+    gcode := `
+        G21
+        G90
+        G0 X0 Y0 Z5
+        G1 X100 Y100 F500
+        M30
+    `
+    instructions, _ := parser.ParseFile(gcode)
 
-Output:
-- []Instruction
+    // 2. Interpret
+    trace, _ := interpreter.InterpretGCode(instructions)
 
-Instruction:
-- Op (G0, G1, G2, G3, M, T, etc)
-- Params (X,Y,Z,I,J,F,S)
-- RawLine (debug)
+    // 3. Access results
+    fmt.Printf("Events: %d\n", trace.EventCount())
+    fmt.Printf("Final position: X=%v Y=%v Z=%v\n",
+        trace.FinalState.Position.X,
+        trace.FinalState.Position.Y,
+        trace.FinalState.Position.Z)
+}
+```
 
-## Interpreter (core headless)
+### Conveniência: Parse e Interpret em uma chamada
 
-Responsabilidade:
-Simular o estado lógico da CNC, não a física.
+```go
+trace, err := interpreter.ParseAndInterpret(gcode)
+```
 
-Estado:
-- posição (X,Y,Z)
-- unidade (mm/inch)
-- plano (XY)
-- modo (abs/inc)
-- ferramenta
-- feed
-- spindle
+### Configuração
 
-Processo:
-- percorre instruções
-- gera eventos de execução
+```go
+import "github.com/eduardotorresdev/gocode-check/internal/config"
 
-Output:
-ExecutionTrace
-- Events
-- FinalState
+cfg := config.NewConfig(
+    config.WithTolerance(1e-6),      // Tolerância numérica
+    config.WithUI(),                  // Habilitar UI (headed mode)
+    config.WithSnapshotDir("./snaps"), // Diretório de snapshots
+)
+```
 
-Eventos:
-- RapidMove
-- LinearCut
-- ArcCut
-- DrillCycle
-- ToolChange
+### Modos de Execução
 
-## Machining Model
+| Modo | Descrição | Uso |
+|------|-----------|-----|
+| Headless | Parser + Interpreter + Asserts + Snapshot | CI/CD, testes automatizados |
+| Headed | Headless + Renderer | Debug local, inspeção visual |
 
-Responsabilidade:
-Responder: “o que foi usinado?”
+---
 
-Transforma eventos em entidades verificáveis.
+## Detalhes de Implementação
 
-Modelo:
-MachiningModel
-- Holes
-- Slots
-- Contours
-- Pockets (opcional)
-- Warnings
+### Arquitetura
 
-Exemplo Hole:
-- CenterX
-- CenterY
-- Diameter
-- Depth
-- Tool
+```
+string G-code
+    ↓
+┌─────────┐
+│ Parser  │  → []Instruction
+└────┬────┘
+     ↓
+┌──────────────┐
+│ Interpreter  │  → ExecutionTrace (Events + FinalState)
+└──────┬───────┘
+       ↓
+┌─────────────────┐
+│ Machining Model │  → Holes, Slots, Contours (futuro)
+└────────┬────────┘
+         ↓
+┌────────────────┐
+│ Assertion API  │  → Validação fluente (futuro)
+└────────┬───────┘
+         ↓
+┌─────────────────┐
+│ Snapshot Engine │  → JSON determinístico (futuro)
+└────────┬────────┘
+         ↓
+┌─────────────┐
+│ UI Renderer │  → SVG, PNG, WebView (opcional, futuro)
+└─────────────┘
+```
 
-Este modelo é a fonte de verdade para validação.
+### Estrutura de Pacotes
 
-## Assertion API
+```
+gocode-check/
+├── cmd/gocodecheck/     # CLI
+├── internal/
+│   └── config/          # Configurações globais
+└── pkg/
+    ├── parser/          # Parser de G-code
+    └── interpreter/     # Interpretador de estado
+```
 
-Inspirada no Playwright.
-Fluente, legível e reprodutível.
+### Parser (`pkg/parser`)
 
-Exemplo:
+**Responsabilidade:** Converter string G-code em instruções semânticas mínimas.
 
-model := gocodecheck.Interpret(gcode)
+**Características:**
+- Sem IO
+- Sem tempo (time.Now)
+- Sem aleatoriedade
+- Determinístico
 
-gocodecheck.Assert(model).
-  HasHole().
-  At(120, 45).
-  WithDiameter(5).
-  WithDepth(15)
+**Códigos Suportados:**
+| Tipo | Códigos | Descrição |
+|------|---------|-----------|
+| Motion | G0, G1, G2, G3 | Movimentos rápidos, lineares e arcos |
+| Positioning | G90, G91 | Absoluto / Incremental |
+| Units | G20, G21 | Polegadas / Milímetros |
+| Tool | T | Seleção de ferramenta |
+| Misc | M | Comandos diversos (M3, M4, M5, M30, etc.) |
 
-gocodecheck.Assert(model).
-  NoOperationOutside(bounds)
+**Estrutura de dados:**
+```go
+type Instruction struct {
+    Op         Op        // G0, G1, G2, G3, M, T, etc.
+    Params     Params    // X, Y, Z, I, J, K, R, F, S, P
+    RawLine    string    // Linha original (debug)
+    LineNumber int       // Número da linha
+}
+```
 
-Características:
-- asserts puros
-- mensagens de erro descritivas
-- sem dependência de UI
+### Interpreter (`pkg/interpreter`)
 
-## Snapshot Engine
+**Responsabilidade:** Simular o estado lógico da CNC, não a física.
 
-Snapshot não é imagem.
-Snapshot é o estado semântico serializado.
+**Estado da Máquina (`MachineState`):**
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| Position | Position | Coordenadas X, Y, Z |
+| Unit | Unit | mm ou inches |
+| Plane | Plane | XY, XZ, YZ |
+| Mode | PositionMode | Absoluto ou Incremental |
+| Tool | *int | Ferramenta atual |
+| Feed | float64 | Taxa de avanço |
+| Spindle | float64 | Velocidade do spindle |
+| SpindleOn | bool | Spindle ligado/desligado |
+| SpindleCW | bool | Sentido de rotação |
 
-Inclui:
-- MachiningModel normalizado
-- ordenação explícita
-- tolerância numérica fixa
+**Eventos Gerados:**
+| Evento | Descrição |
+|--------|-----------|
+| RapidMove | Movimento rápido (G0) |
+| LinearCut | Corte linear (G1) |
+| ArcCW | Arco horário (G2) |
+| ArcCCW | Arco anti-horário (G3) |
+| DrillCycle | Ciclo de furação |
+| ToolChange | Troca de ferramenta |
+| SpindleStart | Ligar spindle (M3/M4) |
+| SpindleStop | Desligar spindle (M5) |
+| UnitChange | Mudança de unidade (G20/G21) |
+| ModeChange | Mudança de modo (G90/G91) |
 
-Formato:
-- JSON
+**Saída (`ExecutionTrace`):**
+```go
+type ExecutionTrace struct {
+    Events     []Event       // Lista ordenada de eventos
+    FinalState *MachineState // Estado final da máquina
+}
+```
 
-Uso:
+### Reprodutibilidade
 
-Assert(model).MatchesSnapshot("simple_panel.json")
-
-Benefícios:
-- CI-friendly
-- diff legível
-- determinístico
-- independente de UI
-
-## UI Renderer (opcional)
-
-A UI não interpreta G-code.
-Ela apenas renderiza o MachiningModel.
-
-Possibilidades:
-- SVG
-- PNG
-- WebView
-- Canvas
-
-Uso:
-- debug local
-- inspeção visual
-- documentação
-
-Exemplo:
-
-ui.Render(model)
-ui.RenderDiff(snapshot, model)
-
-## Headless vs Headed
-
-Headless (default):
-- parser
-- interpreter
-- asserts
-- snapshot
-- usado em CI
-- rápido e determinístico
-
-Headed:
-- tudo do headless
-- + renderer
-- ativado por flag
-
-Exemplo:
-
-gocodecheck.Run(test, WithUI())
-
-## Reprodutibilidade
-
-Regras obrigatórias:
-- não usar time.Now
-- não usar RNG sem seed fixa
-- ordenar listas explicitamente
-- usar tolerância numérica fixa
+**Regras obrigatórias:**
+- Não usar `time.Now`
+- Não usar RNG sem seed fixa
+- Ordenar listas explicitamente
+- Usar tolerância numérica fixa (default: 1e-9)
 
 Isso garante snapshots confiáveis e CI estável.
 
-## O que não é escopo
+---
 
-- validar texto bruto do G-code
-- simular aceleração
-- simular tempo
-- depender de CNC real
-- misturar UI com core
+## Roadmap
 
-## Modelo mental (Playwright)
+Consulte [ROADMAP.md](ROADMAP.md) para o planejamento completo.
 
-Playwright -> gocode-check
-DOM -> MachiningModel
-expect() -> Assert()
-snapshot visual -> snapshot semântico
-headed -> renderer
-headless -> core
+**Status atual:**
+- ✅ Fase 0 — Setup e fundação
+- ✅ Fase 1 — Parser
+- ✅ Fase 2 — Interpreter (core headless)
+- ⬜ Fase 3 — Machining Model
+- ⬜ Fase 4 — Assertion API
+- ⬜ Fase 5 — Snapshot Engine
+- ⬜ Fase 6 — UI Renderer
+- ⬜ Fase 7 — Tooling e DX
+- ⬜ Fase 8 — CI/CD e releases
 
-## Fluxo final
+---
 
-string G-code
-→ parser
-→ interpreter
-→ machining model
-→ asserts
-→ snapshot
-→ (opcional) UI
+## Desenvolvimento
 
-Isso fecha um teste end-to-end real, independente de CNC, reproduzível e evolutivo.
+### Comandos Make
+
+```bash
+make fmt       # Formatar código
+make lint      # Executar linters
+make test      # Executar testes
+make test-cover # Testes com cobertura
+make build     # Compilar binário
+make release   # Build de release
+make clean     # Limpar artefatos
+```
+
+### Desenvolvimento local com hot reload
+
+```bash
+# Requer: go install github.com/air-verse/air@latest
+air
+```
+
+---
+
+## O que NÃO é escopo
+
+- Validar texto bruto do G-code (sintaxe pura)
+- Simular aceleração física
+- Simular tempo de execução real
+- Depender de CNC real
+- Misturar lógica de UI com core
+
+---
+
+## Modelo Mental (Analogia com Playwright)
+
+| Playwright | gocode-check |
+|------------|--------------|
+| DOM | MachiningModel |
+| expect() | Assert() |
+| snapshot visual | snapshot semântico |
+| headed | renderer |
+| headless | core |
+
+---
+
+## Licença
+
+MIT
