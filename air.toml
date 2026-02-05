@@ -1,0 +1,41 @@
+# air.toml - Configuration for hot reloading during development
+# https://github.com/cosmtrek/air
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  # Binary to build and run
+  bin = "./tmp/main"
+  # Build command
+  cmd = "go build -o ./tmp/main ./cmd/gocodecheck"
+  # Watch all .go files
+  include_ext = ["go"]
+  # Exclude directories
+  exclude_dir = ["tmp", "vendor", ".git"]
+  # Delay before rebuilding (milliseconds)
+  delay = 1000
+  # Stop running old binary when build error occurs
+  stop_on_error = true
+  # Send interrupt signal before killing process
+  send_interrupt = true
+  # Delay after sending interrupt before killing (milliseconds)
+  kill_delay = 500
+
+[log]
+  # Show log time
+  time = true
+
+[color]
+  # Build info
+  build = "yellow"
+  # Main info
+  main = "magenta"
+  # Runner info
+  runner = "green"
+  # Watcher info
+  watcher = "cyan"
+
+[misc]
+  # Delete tmp directory on exit
+  clean_on_exit = true
