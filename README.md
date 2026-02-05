@@ -36,7 +36,7 @@ Biblioteca em Go para validação end-to-end de programas G-code através de int
 - ✅ **Interpretador de Estado** - Simula o comportamento lógico da máquina CNC
 - ✅ **Modelo Semântico** - Identifica furos, ranhuras e contornos automaticamente
 - ✅ **API de Assertions** - Interface fluente para validações estilo Playwright
-- ⏳ **Sistema de Snapshots** - Testes baseados em snapshots para CI/CD (planejado)
+- ✅ **Sistema de Snapshots** - Testes baseados em snapshots para CI/CD
 - ⏳ **Renderização Visual** - Debug visual opcional (planejado)
 
 ## Propósito
@@ -346,6 +346,91 @@ assert.ExpectWithTolerance(model, 0.001).
 | **Bounds** | `NoOperationOutside(bounds)` | Verifica se todas as operações estão dentro dos limites |
 | **Utility** | `And()` | Reinicia contexto para nova cadeia de assertions |
 
+### Snapshot API
+
+O pacote `snapshot` fornece testes baseados em snapshots para detectar regressões. Os snapshots são representações JSON determinísticas do `MachiningModel`, permitindo comparações confiáveis em CI/CD.
+
+**Uso básico:**
+
+```go
+package mytest
+
+import (
+    "testing"
+    "github.com/eduardotorresdev/gocode-check/pkg/snapshot"
+    "github.com/eduardotorresdev/gocode-check/pkg/interpreter"
+    "github.com/eduardotorresdev/gocode-check/pkg/machining"
+)
+
+func TestGCodeSnapshot(t *testing.T) {
+    gcode := `
+        G21
+        G90
+        T1
+        G0 X50 Y50 Z5
+        G1 Z-10 F100
+    `
+    trace, _ := interpreter.ParseAndInterpret(gcode)
+    model, _ := machining.Analyze(trace)
+    
+    // Compara contra snapshot salvo
+    snapshot.AssertMatchesSnapshot(t, model, "my-gcode-program")
+}
+```
+
+**Atualizando snapshots:**
+
+Quando o modelo mudar intencionalmente, atualize os snapshots:
+
+```bash
+# Via variável de ambiente
+UPDATE_SNAPSHOTS=true go test ./...
+
+# Via make
+make snapshot
+```
+
+**Configuração customizada:**
+
+```go
+config := snapshot.Config{
+    Dir:       "testdata/custom-snapshots",
+    Precision: 4, // casas decimais para arredondamento
+}
+snapshot.AssertMatchesSnapshotWithConfig(t, model, "name", config)
+```
+
+**Formato do snapshot:**
+
+```json
+{
+  "version": "1.0.0",
+  "model": {
+    "holes": [
+      {
+        "center": {"x": 50, "y": 50},
+        "diameter": 6,
+        "depth": 15,
+        "topZ": 5,
+        "bottomZ": -10,
+        "tool": 1
+      }
+    ],
+    "slots": [],
+    "contours": []
+  }
+}
+```
+
+**Características:**
+
+| Característica | Descrição |
+|----------------|-----------|
+| **Determinístico** | Listas ordenadas, floats arredondados com precisão configurável |
+| **Versionado** | Campo `version` para compatibilidade futura |
+| **Diff legível** | Mensagens de erro mostram diferenças linha por linha |
+| **CI/CD ready** | Falha testes automaticamente se snapshots divergirem |
+
 ### Configuração
 
 A biblioteca permite configuração personalizada através do pacote `config`:
@@ -377,7 +462,7 @@ A biblioteca suporta dois modos de execução:
 
 | Modo | Componentes | Casos de Uso | Status |
 |------|-------------|--------------|--------|
-| **Headless** | Parser + Interpreter + Assertions + Snapshots | CI/CD, testes automatizados, validação em batch | ✅ Implementado (parcial) |
+| **Headless** | Parser + Interpreter + Assertions + Snapshots | CI/CD, testes automatizados, validação em batch | ✅ Implementado |
 | **Headed** | Headless + Renderer (UI) | Debug local, inspeção visual, desenvolvimento | ⏳ Planejado |
 
 **Headless Mode** (Atual):
@@ -447,8 +532,14 @@ A biblioteca segue uma arquitetura em camadas, onde cada camada transforma a inf
 └────────┬───────────────────────────┘
          ↓
 ┌────────────────────────────────────┐
-│  Snapshot/Renderer (futuro)        │
-│  JSON snapshots ou UI visual       │
+│  Snapshot Engine                   │
+│  pkg/snapshot                      │
+│  JSON determinístico p/ regressão  │
+└────────┬───────────────────────────┘
+         ↓
+┌────────────────────────────────────┐
+│  Renderer (futuro)                 │
+│  UI visual para debug              │
 └────────────────────────────────────┘
 ```
 
@@ -462,9 +553,10 @@ gocode-check/
 │   └── config/          # Configurações globais e opções
 └── pkg/                 # API pública da biblioteca
     ├── assert/          # API fluente de assertions
-    ├── parser/          # Parser determinístico de G-code
     ├── interpreter/     # Simulador de estado da CNC
-    └── machining/       # Análise semântica de usinagem
+    ├── machining/       # Análise semântica de usinagem
+    ├── parser/          # Parser determinístico de G-code
+    └── snapshot/        # Sistema de snapshots para testes
 ```
 
 ### Parser (`pkg/parser`)
@@ -704,13 +796,12 @@ Consulte [ROADMAP.md](ROADMAP.md) para o planejamento completo e detalhado.
 | Fase 2 | Interpreter (core headless) | ✅ Completo |
 | Fase 3 | Machining Model | ✅ Completo |
 | Fase 4 | Assertion API | ✅ Completo |
-| Fase 5 | Snapshot Engine | ⏳ Planejado |
+| Fase 5 | Snapshot Engine | ✅ Completo |
 | Fase 6 | UI Renderer | ⏳ Planejado |
 | Fase 7 | Tooling e DX | ⏳ Planejado |
 | Fase 8 | CI/CD e Releases | ⏳ Planejado |
 
 **Próximos passos:**
-- Desenvolver sistema de snapshots para testes (Fase 5)
 - Adicionar renderização visual opcional (Fase 6)
 - Melhorar ferramentas e DX (Fase 7)
 

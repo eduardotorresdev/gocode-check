@@ -243,8 +243,8 @@ func (i *Interpreter) executeMCode(instr parser.Instruction) error {
 		}
 		i.trace.AddEvent(event)
 
-	// M0, M1, M2, M30, M6, etc. are acknowledged but don't produce events
-	// for the machining model (they are program flow control)
+		// M0, M1, M2, M30, M6, etc. are acknowledged but don't produce events
+		// for the machining model (they are program flow control)
 	}
 
 	return nil
