@@ -18,7 +18,7 @@ reprodutibilidade e segurança para uso em CI/CD.
 | Fase 2 | Interpreter (Core Headless) | ✅ | 100% |
 | Fase 3 | Machining Model | ✅ | 100% |
 | Fase 4 | Assertion API | ✅ | 100% |
-| Fase 5 | Snapshot Engine | 📋 | 0% |
+| Fase 5 | Snapshot Engine | ✅ | 100% |
 | Fase 6 | UI Renderer | 📋 | 0% |
 | Fase 7 | Tooling e DX | 📋 | 0% |
 | Fase 8 | CI/CD e Releases | 📋 | 0% |
@@ -190,29 +190,29 @@ assert.Expect(model).
 
 **Status:** ✅ **Completo** (100%)
 
-## 📋 Fase 5 — Snapshot Engine
+## ✅ Fase 5 — Snapshot Engine
 
 **Objetivo:** Implementar sistema de snapshots para testes baseados em regressão.
 
-**Entregas Planejadas:**
-- [ ] Design do formato de snapshot (JSON determinístico)
-- [ ] Normalização do `MachiningModel`
-  - [ ] Ordenação explícita de todas as listas
-  - [ ] Arredondamento consistente com tolerância fixa
-  - [ ] Remoção de campos não determinísticos
-- [ ] Implementar serialização JSON determinística
-  - [ ] Garantir ordem de campos consistente
-  - [ ] Formatar números com precisão fixa
-  - [ ] Incluir metadados (versão, data, configuração)
-- [ ] Modo de atualização de snapshots (`UPDATE_SNAPSHOTS=true`)
-- [ ] Comparação de snapshots com diff legível
-- [ ] Integração com CI/CD
-  - [ ] Falhar testes se snapshots divergirem
-  - [ ] Detectar mudanças não intencionais
-- [ ] Armazenamento e versionamento de snapshots
-- [ ] Documentação de uso e boas práticas
+**Entregas:**
+- [x] Design do formato de snapshot (JSON determinístico)
+- [x] Normalização do `MachiningModel`
+  - [x] Ordenação explícita de todas as listas
+  - [x] Arredondamento consistente com tolerância fixa
+  - [x] Remoção de campos não determinísticos
+- [x] Implementar serialização JSON determinística
+  - [x] Garantir ordem de campos consistente
+  - [x] Formatar números com precisão fixa
+  - [x] Incluir metadados (versão)
+- [x] Modo de atualização de snapshots (`UPDATE_SNAPSHOTS=true`)
+- [x] Comparação de snapshots com diff legível
+- [x] Integração com CI/CD
+  - [x] Falhar testes se snapshots divergirem
+  - [x] Detectar mudanças não intencionais
+- [x] Armazenamento e versionamento de snapshots
+- [x] Documentação de uso e boas práticas
 
-**Exemplo de uso futuro:**
+**Exemplo de uso:**
 ```go
 // Testar contra snapshot salvo
 model, _ := machining.Analyze(trace)
@@ -222,7 +222,7 @@ snapshot.AssertMatchesSnapshot(t, model, "test-program-v1")
 // UPDATE_SNAPSHOTS=true go test
 ```
 
-**Status:** 📋 **Planejado** (0%)
+**Status:** ✅ **Completo** (100%)
 
 ## 📋 Fase 6 — UI Renderer (Opcional)
 
@@ -325,7 +325,7 @@ snapshot.AssertMatchesSnapshot(t, model, "test-program-v1")
 
 ## Próximos Passos Imediatos
 
-1. **Fase 5** - Começar implementação do Snapshot Engine
+1. **Fase 6** - Começar implementação do UI Renderer
 2. Coletar feedback da comunidade sobre prioridades
 3. Avaliar necessidade de features adicionais
 

@@ -564,9 +564,12 @@ type mockT struct {
 	fatal  bool
 }
 
-func (m *mockT) Helper()                       {}
+func (m *mockT) Helper()                           {}
 func (m *mockT) Errorf(format string, args ...any) { m.errors = append(m.errors, "error") }
-func (m *mockT) Fatalf(format string, args ...any) { m.errors = append(m.errors, "fatal"); m.fatal = true }
+func (m *mockT) Fatalf(format string, args ...any) {
+	m.errors = append(m.errors, "fatal")
+	m.fatal = true
+}
 
 func TestAssert_PassingTest(t *testing.T) {
 	gcode := `G21
