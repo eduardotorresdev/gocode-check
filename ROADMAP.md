@@ -17,7 +17,7 @@ reprodutibilidade e segurança para uso em CI/CD.
 | Fase 1 | Parser | ✅ | 100% |
 | Fase 2 | Interpreter (Core Headless) | ✅ | 100% |
 | Fase 3 | Machining Model | ✅ | 100% |
-| Fase 4 | Assertion API | 📋 | 0% |
+| Fase 4 | Assertion API | ✅ | 100% |
 | Fase 5 | Snapshot Engine | 📋 | 0% |
 | Fase 6 | UI Renderer | 📋 | 0% |
 | Fase 7 | Tooling e DX | 📋 | 0% |
@@ -135,37 +135,60 @@ reprodutibilidade e segurança para uso em CI/CD.
 
 **Status:** ✅ **Completo** (100%)
 
-## 📋 Fase 4 — Assertion API
+## ✅ Fase 4 — Assertion API
 
 **Objetivo:** Criar uma API fluente para validação de programas G-code, inspirada no Playwright.
 
-**Entregas Planejadas:**
-- [ ] Design da API fluente e ergonômica
-- [ ] Implementar assertions básicas
-  - [ ] `HasHole(x, y)` - Verificar existência de furo em posição
-  - [ ] `At(x, y, z)` - Filtrar por posição específica
-  - [ ] `WithDiameter(diameter, tolerance)` - Filtrar por diâmetro
-  - [ ] `WithDepth(depth, tolerance)` - Filtrar por profundidade
-  - [ ] `HasSlot(start, end)` - Verificar ranhura
-  - [ ] `HasContour(points)` - Verificar contorno
-  - [ ] `NoOperationOutside(bounds)` - Verificar limites da peça
-- [ ] Implementar encadeamento de assertions
-  - [ ] `expect(model).HasHole(50, 50).WithDiameter(6.0)`
-- [ ] Mensagens de erro claras e úteis
-- [ ] Suporte a comparações com tolerância configurável
-- [ ] Testes completos da API de assertions
-- [ ] Documentação e exemplos de uso
+**Entregas:**
+- [x] Design da API fluente e ergonômica
+- [x] Implementar assertions básicas
+  - [x] `HasHole(x, y)` - Verificar existência de furo em posição
+  - [x] `HasHoleCount(n)` - Verificar quantidade de furos
+  - [x] `WithDiameter(diameter)` - Filtrar por diâmetro
+  - [x] `WithDepth(depth)` - Filtrar por profundidade
+  - [x] `WithTool(tool)` - Filtrar por ferramenta
+  - [x] `HasSlot(startX, startY, endX, endY)` - Verificar ranhura
+  - [x] `HasSlotCount(n)` - Verificar quantidade de ranhuras
+  - [x] `WithWidth(width)` - Filtrar por largura
+  - [x] `WithSlotDepth(depth)` - Filtrar por profundidade de ranhura
+  - [x] `HasContour()` - Verificar existência de contorno
+  - [x] `HasContourCount(n)` - Verificar quantidade de contornos
+  - [x] `IsClosed()` - Filtrar contornos fechados
+  - [x] `IsOpen()` - Filtrar contornos abertos
+  - [x] `HasSegmentCount(n)` - Filtrar por quantidade de segmentos
+  - [x] `NoOperationOutside(bounds)` - Verificar limites da peça
+- [x] Implementar encadeamento de assertions
+  - [x] `Expect(model).HasHole(50, 50).WithDiameter(6.0)`
+  - [x] `And()` - Permitir múltiplas cadeias de assertions
+- [x] Mensagens de erro claras e úteis
+  - [x] Contexto completo da cadeia de assertions
+  - [x] Lista de valores disponíveis quando falha
+- [x] Suporte a comparações com tolerância configurável
+  - [x] `ExpectWithTolerance(model, tolerance)` para tolerância customizada
+- [x] Integração com testing.T
+  - [x] `Assert(t)` - Falha com Errorf (continua teste)
+  - [x] `AssertFatal(t)` / `Must(t)` - Falha com Fatalf (para teste)
+- [x] Testes completos da API de assertions
+- [x] Documentação e exemplos de uso
 
-**Exemplo de uso futuro:**
+**Exemplo de uso:**
 ```go
 // Validar que existe um furo de 6mm de diâmetro em (50, 50)
-expect(model).HasHole(50, 50).WithDiameter(6.0, 0.01)
+assert.Expect(model).HasHole(50, 50).WithDiameter(6.0).Assert(t)
 
 // Validar que não há operações fora dos limites
-expect(model).NoOperationOutside(Bounds{MaxX: 100, MaxY: 100})
+bounds := assert.Bounds{MaxX: 100, MaxY: 100, MinZ: -20, MaxZ: 10}
+assert.Expect(model).NoOperationOutside(bounds).Assert(t)
+
+// Validações encadeadas com And()
+assert.Expect(model).
+    HasHole(50, 50).WithDepth(15.0).
+    And().
+    HasContour().IsClosed().
+    Assert(t)
 ```
 
-**Status:** 📋 **Planejado** (0%)
+**Status:** ✅ **Completo** (100%)
 
 ## 📋 Fase 5 — Snapshot Engine
 
@@ -302,7 +325,7 @@ snapshot.AssertMatchesSnapshot(t, model, "test-program-v1")
 
 ## Próximos Passos Imediatos
 
-1. **Fase 4** - Começar design da Assertion API
+1. **Fase 5** - Começar implementação do Snapshot Engine
 2. Coletar feedback da comunidade sobre prioridades
 3. Avaliar necessidade de features adicionais
 
