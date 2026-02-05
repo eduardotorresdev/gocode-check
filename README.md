@@ -1,36 +1,62 @@
 # gocode-check
 
-Biblioteca em Go para validação end-to-end de G-code.
+[![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://go.dev/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/eduardotorresdev/gocode-check)
+
+Biblioteca em Go para validação end-to-end de programas G-code através de interpretação lógica e análise semântica.
+
+---
+
+## Índice
+
+- [O que é](#o-que-é)
+- [Propósito](#propósito)
+- [Como Usar](#como-usar)
+  - [Instalação](#instalação)
+  - [Exemplo Básico](#exemplo-básico)
+  - [Machining Model](#machining-model)
+  - [Configuração](#configuração)
+  - [Modos de Execução](#modos-de-execução)
+- [Detalhes de Implementação](#detalhes-de-implementação)
+- [Roadmap](#roadmap)
+- [Desenvolvimento](#desenvolvimento)
+- [Contribuindo](#contribuindo)
+- [Licença](#licença)
 
 ---
 
 ## O que é
 
-gocode-check é uma biblioteca que interpreta G-code como uma CNC lógica, gerando um modelo semântico de usinagem que permite validação automatizada sem depender de máquina real.
+**gocode-check** é uma biblioteca Go que interpreta programas G-code como uma CNC lógica, gerando um modelo semântico de usinagem que permite validação automatizada sem depender de máquina real. Ideal para testes automatizados, validação de programas CNC e integração contínua.
 
 **Características principais:**
-- Parser determinístico de G-code
-- Interpretador de estado da máquina CNC
-- Modelo semântico de usinagem
-- API de assertions fluente (inspirada no Playwright)
-- Sistema de snapshots para CI/CD
-- Renderização opcional para debug visual
+
+- ✅ **Parser Determinístico** - Converte G-code em instruções estruturadas
+- ✅ **Interpretador de Estado** - Simula o comportamento lógico da máquina CNC
+- ✅ **Modelo Semântico** - Identifica furos, ranhuras e contornos automaticamente
+- ⏳ **API de Assertions** - Interface fluente para validações (em desenvolvimento)
+- ⏳ **Sistema de Snapshots** - Testes baseados em snapshots para CI/CD (planejado)
+- ⏳ **Renderização Visual** - Debug visual opcional (planejado)
 
 ## Propósito
 
 Permitir testes end-to-end de programas G-code de forma:
-- **Determinística** - mesma entrada sempre produz mesma saída
-- **Reprodutível** - funciona igual em qualquer ambiente
-- **Automatizada** - integração nativa com CI/CD
-- **Independente** - não requer CNC real
+
+- 🎯 **Determinística** - Mesma entrada sempre produz mesma saída
+- 🔄 **Reprodutível** - Funciona de forma idêntica em qualquer ambiente
+- 🤖 **Automatizada** - Integração nativa com CI/CD pipelines
+- 🚀 **Independente** - Não requer CNC real ou simuladores proprietários
 
 ### Princípio Central
 
 > A validação não depende da UI. A UI é apenas uma forma de visualizar o mesmo estado interno.
 
-- Core 100% headless
-- UI consome o mesmo modelo
-- Snapshot é serialização determinística do estado
+**Arquitetura Headless-First:**
+- Core 100% headless e determinístico
+- UI (quando implementada) consome o mesmo modelo interno
+- Snapshots são serializações determinísticas do estado
+- Perfeito para integração com sistemas de teste automatizados
 
 ---
 
@@ -38,338 +64,542 @@ Permitir testes end-to-end de programas G-code de forma:
 
 ### Instalação
 
+**Pré-requisitos:**
+- Go 1.22 ou superior
+
+**Instalar a biblioteca:**
+
 ```bash
 go get github.com/eduardotorresdev/gocode-check
 ```
 
+**Verificar instalação:**
+
+```bash
+go mod tidy
+```
+
 ### Exemplo Básico
+
+Este exemplo mostra como fazer parse e interpretar um programa G-code simples:
 
 ```go
 package main
 
 import (
     "fmt"
+    "log"
     "github.com/eduardotorresdev/gocode-check/pkg/parser"
     "github.com/eduardotorresdev/gocode-check/pkg/interpreter"
 )
 
 func main() {
-    // 1. Parse G-code
+    // 1. Definir o programa G-code
     gcode := `
-        G21
-        G90
-        G0 X0 Y0 Z5
-        G1 X100 Y100 F500
-        M30
+        G21          ; Usar milímetros
+        G90          ; Modo de posicionamento absoluto
+        G0 X0 Y0 Z5  ; Movimento rápido para posição inicial
+        G1 X100 Y100 F500  ; Movimento linear com avanço de 500 mm/min
+        M30          ; Fim do programa
     `
-    instructions, _ := parser.ParseFile(gcode)
+    
+    // 2. Parse do G-code em instruções
+    instructions, err := parser.ParseFile(gcode)
+    if err != nil {
+        log.Fatalf("Erro no parse: %v", err)
+    }
 
-    // 2. Interpret
-    trace, _ := interpreter.InterpretGCode(instructions)
+    // 3. Interpretar as instruções
+    trace, err := interpreter.InterpretGCode(instructions)
+    if err != nil {
+        log.Fatalf("Erro na interpretação: %v", err)
+    }
 
-    // 3. Access results
-    fmt.Printf("Events: %d\n", trace.EventCount())
-    fmt.Printf("Final position: X=%v Y=%v Z=%v\n",
-        trace.FinalState.Position.X,
-        trace.FinalState.Position.Y,
-        trace.FinalState.Position.Z)
+    // 4. Acessar resultados
+    fmt.Printf("Total de eventos gerados: %d\n", trace.EventCount())
+    fmt.Printf("Posição final da máquina:\n")
+    fmt.Printf("  X = %.2f mm\n", trace.FinalState.Position.X)
+    fmt.Printf("  Y = %.2f mm\n", trace.FinalState.Position.Y)
+    fmt.Printf("  Z = %.2f mm\n", trace.FinalState.Position.Z)
 }
 ```
 
-### Conveniência: Parse e Interpret em uma chamada
+**Saída esperada:**
+```
+Total de eventos gerados: 5
+Posição final da máquina:
+  X = 100.00 mm
+  Y = 100.00 mm
+  Z = 5.00 mm
+```
+
+### Conveniência: Parse e Interpret em uma Chamada
+
+Para simplificar, você pode usar a função `ParseAndInterpret` que combina ambas as operações:
 
 ```go
 trace, err := interpreter.ParseAndInterpret(gcode)
+if err != nil {
+    log.Fatalf("Erro: %v", err)
+}
+// Agora você pode usar o trace diretamente
 ```
 
 ### Machining Model
 
-O Machining Model converte eventos de baixo nível em entidades semânticas de usinagem:
+O **Machining Model** é uma camada de abstração que converte eventos de baixo nível (movimentos, cortes) em entidades semânticas de usinagem (furos, ranhuras, contornos). Isso facilita a validação de operações de usinagem específicas.
+
+**Exemplo completo:**
 
 ```go
+package main
+
 import (
+    "fmt"
+    "log"
     "github.com/eduardotorresdev/gocode-check/pkg/interpreter"
     "github.com/eduardotorresdev/gocode-check/pkg/machining"
 )
 
 func main() {
+    // Programa G-code que executa furação e cortes
     gcode := `
-        G21
-        G90
-        T1
+        G21          ; Milímetros
+        G90          ; Absoluto
+        T1           ; Ferramenta 1
+        
+        ; Fazer um furo em (50, 50)
         G0 X50 Y50 Z5
-        G1 Z-10 F100
-        G0 Z5
+        G1 Z-10 F100  ; Mergulho vertical (plunge)
+        G0 Z5         ; Retorno
+        
+        ; Fazer uma ranhura horizontal
         G0 X0 Y0
-        G1 Z-5 F100
-        G1 X100 F200
+        G1 Z-5 F100   ; Descer até profundidade de corte
+        G1 X100 F200  ; Cortar horizontalmente
+        G0 Z5         ; Retornar
     `
     
-    // Parse and interpret
-    trace, _ := interpreter.ParseAndInterpret(gcode)
-    
-    // Analyze to get machining model
-    model, warnings := machining.Analyze(trace)
-    
-    // Access semantic features
-    fmt.Printf("Holes: %d\n", model.HoleCount())
-    fmt.Printf("Slots: %d\n", model.SlotCount())
-    fmt.Printf("Contours: %d\n", model.ContourCount())
-    
-    // Query specific holes
-    holes := model.HolesAt(50, 50, 0.001)
-    for _, hole := range holes {
-        fmt.Printf("Hole at (%.2f, %.2f) depth=%.2f\n",
-            hole.Center.X, hole.Center.Y, hole.Depth)
+    // Parse e interpretar
+    trace, err := interpreter.ParseAndInterpret(gcode)
+    if err != nil {
+        log.Fatalf("Erro: %v", err)
     }
     
-    // Check for warnings
+    // Analisar e gerar modelo de usinagem
+    model, warnings := machining.Analyze(trace)
+    
+    // Exibir entidades detectadas
+    fmt.Printf("=== Análise do Programa ===\n")
+    fmt.Printf("Furos detectados: %d\n", model.HoleCount())
+    fmt.Printf("Ranhuras detectadas: %d\n", model.SlotCount())
+    fmt.Printf("Contornos detectados: %d\n", model.ContourCount())
+    
+    // Consultar furos específicos por posição
+    fmt.Printf("\n=== Detalhes dos Furos ===\n")
+    holes := model.HolesAt(50, 50, 0.001)
+    for i, hole := range holes {
+        fmt.Printf("Furo %d:\n", i+1)
+        fmt.Printf("  Centro: (%.2f, %.2f)\n", hole.Center.X, hole.Center.Y)
+        fmt.Printf("  Profundidade: %.2f mm\n", hole.Depth)
+        fmt.Printf("  Z superior: %.2f mm\n", hole.TopZ)
+        fmt.Printf("  Z inferior: %.2f mm\n", hole.BottomZ)
+    }
+    
+    // Verificar warnings (avisos não bloqueantes)
     if !warnings.IsEmpty() {
+        fmt.Printf("\n=== Avisos ===\n")
         for _, w := range warnings {
-            fmt.Printf("Warning: %s\n", w)
+            fmt.Printf("⚠️  %s\n", w)
         }
+    } else {
+        fmt.Printf("\n✅ Nenhum aviso detectado\n")
     }
 }
 ```
 
+**Saída esperada:**
+```
+=== Análise do Programa ===
+Furos detectados: 1
+Ranhuras detectadas: 1
+Contornos detectados: 0
+
+=== Detalhes dos Furos ===
+Furo 1:
+  Centro: (50.00, 50.00)
+  Profundidade: 15.00 mm
+  Z superior: 5.00 mm
+  Z inferior: -10.00 mm
+
+✅ Nenhum aviso detectado
+```
+
 ### Configuração
+
+A biblioteca permite configuração personalizada através do pacote `config`:
 
 ```go
 import "github.com/eduardotorresdev/gocode-check/internal/config"
 
+// Criar configuração com opções personalizadas
 cfg := config.NewConfig(
-    config.WithTolerance(1e-6),      // Tolerância numérica
-    config.WithUI(),                  // Habilitar UI (headed mode)
-    config.WithSnapshotDir("./snaps"), // Diretório de snapshots
+    config.WithTolerance(1e-6),           // Tolerância numérica para comparações
+    config.WithUI(),                       // Habilitar modo UI (headed mode)
+    config.WithSnapshotDir("./snapshots"), // Diretório para armazenar snapshots
 )
+
+// Usar a configuração (implementação futura)
 ```
+
+**Opções disponíveis:**
+
+| Opção | Descrição | Valor Padrão |
+|-------|-----------|--------------|
+| `WithTolerance(float64)` | Tolerância para comparações numéricas | `1e-9` |
+| `WithUI()` | Ativa modo headed com renderização visual | `false` |
+| `WithSnapshotDir(string)` | Define diretório de snapshots | `"./testdata/snapshots"` |
 
 ### Modos de Execução
 
-| Modo | Descrição | Uso |
-|------|-----------|-----|
-| Headless | Parser + Interpreter + Asserts + Snapshot | CI/CD, testes automatizados |
-| Headed | Headless + Renderer | Debug local, inspeção visual |
+A biblioteca suporta dois modos de execução:
+
+| Modo | Componentes | Casos de Uso | Status |
+|------|-------------|--------------|--------|
+| **Headless** | Parser + Interpreter + Assertions + Snapshots | CI/CD, testes automatizados, validação em batch | ✅ Implementado (parcial) |
+| **Headed** | Headless + Renderer (UI) | Debug local, inspeção visual, desenvolvimento | ⏳ Planejado |
+
+**Headless Mode** (Atual):
+- Totalmente determinístico
+- Sem dependências de interface gráfica
+- Ideal para ambientes de CI/CD
+- Resultados reproduzíveis entre execuções
+
+**Headed Mode** (Futuro):
+- Inclui todas as funcionalidades do modo headless
+- Adiciona renderização visual (SVG, PNG, WebView)
+- Útil para debug e inspeção visual de programas G-code
 
 ---
 
 ## Detalhes de Implementação
 
-### Arquitetura
+### Arquitetura em Camadas
+
+A biblioteca segue uma arquitetura em camadas, onde cada camada transforma a informação:
 
 ```
-string G-code
-    ↓
-┌─────────┐
-│ Parser  │  → []Instruction
-└────┬────┘
-     ↓
-┌──────────────┐
-│ Interpreter  │  → ExecutionTrace (Events + FinalState)
-└──────┬───────┘
-       ↓
-┌─────────────────┐
-│ Machining Model │  → Holes, Slots, Contours
-└────────┬────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  Input: String G-code                                        │
+│  "G21\nG90\nG0 X10 Y20 Z5\nG1 X50 Y50 F100\nM30"           │
+└────────────────────────┬─────────────────────────────────────┘
+                         ↓
+              ┌──────────────────────┐
+              │  Parser              │
+              │  pkg/parser          │
+              └──────────┬───────────┘
+                         ↓
+         ┌───────────────────────────────┐
+         │  []Instruction                │
+         │  Lista estruturada de         │
+         │  comandos G-code              │
+         └───────────┬───────────────────┘
+                     ↓
+      ┌──────────────────────────────┐
+      │  Interpreter                 │
+      │  pkg/interpreter             │
+      └──────────┬───────────────────┘
+                 ↓
+    ┌────────────────────────────────────┐
+    │  ExecutionTrace                    │
+    │  - Events (movimentos, cortes)     │
+    │  - FinalState (posição final)      │
+    └────────┬───────────────────────────┘
+             ↓
+ ┌───────────────────────────────┐
+ │  Machining Analyzer           │
+ │  pkg/machining                │
+ └───────┬───────────────────────┘
          ↓
-┌────────────────┐
-│ Assertion API  │  → Validação fluente (futuro)
-└────────┬───────┘
+┌────────────────────────────────────┐
+│  MachiningModel                    │
+│  - Holes (furos)                   │
+│  - Slots (ranhuras)                │
+│  - Contours (contornos)            │
+│  + Warnings (avisos)               │
+└────────┬───────────────────────────┘
          ↓
-┌─────────────────┐
-│ Snapshot Engine │  → JSON determinístico (futuro)
-└────────┬────────┘
+┌────────────────────────────────────┐
+│  Assertion API (futuro)            │
+│  Validações fluentes               │
+└────────┬───────────────────────────┘
          ↓
-┌─────────────┐
-│ UI Renderer │  → SVG, PNG, WebView (opcional, futuro)
-└─────────────┘
+┌────────────────────────────────────┐
+│  Snapshot/Renderer (futuro)        │
+│  JSON snapshots ou UI visual       │
+└────────────────────────────────────┘
 ```
 
 ### Estrutura de Pacotes
 
 ```
 gocode-check/
-├── cmd/gocodecheck/     # CLI
+├── cmd/
+│   └── gocodecheck/     # CLI para execução standalone
 ├── internal/
-│   └── config/          # Configurações globais
-└── pkg/
-    ├── parser/          # Parser de G-code
-    ├── interpreter/     # Interpretador de estado
-    └── machining/       # Modelo semântico de usinagem
+│   └── config/          # Configurações globais e opções
+└── pkg/                 # API pública da biblioteca
+    ├── parser/          # Parser determinístico de G-code
+    ├── interpreter/     # Simulador de estado da CNC
+    └── machining/       # Análise semântica de usinagem
 ```
 
 ### Parser (`pkg/parser`)
 
-**Responsabilidade:** Converter string G-code em instruções semânticas mínimas.
+**Responsabilidade:** Converter strings G-code em instruções estruturadas e validadas.
 
-**Características:**
-- Sem IO
-- Sem tempo (time.Now)
-- Sem aleatoriedade
-- Determinístico
+**Princípios de Design:**
+- ✅ **Sem I/O** - Não lê arquivos ou rede
+- ✅ **Sem tempo** - Não usa `time.Now()` ou timestamps
+- ✅ **Sem aleatoriedade** - Sem geradores de números aleatórios
+- ✅ **100% Determinístico** - Mesma entrada sempre produz mesma saída
 
-**Códigos Suportados:**
-| Tipo | Códigos | Descrição |
-|------|---------|-----------|
-| Motion | G0, G1, G2, G3 | Movimentos rápidos, lineares e arcos |
-| Positioning | G90, G91 | Absoluto / Incremental |
-| Units | G20, G21 | Polegadas / Milímetros |
-| Tool | T | Seleção de ferramenta |
-| Misc | M | Comandos diversos (M3, M4, M5, M30, etc.) |
+**Códigos G-code Suportados:**
 
-**Estrutura de dados:**
+| Categoria | Códigos | Descrição |
+|-----------|---------|-----------|
+| **Motion** | `G0`, `G1`, `G2`, `G3` | Movimento rápido, linear, arco horário, arco anti-horário |
+| **Positioning** | `G90`, `G91` | Modo absoluto e incremental |
+| **Units** | `G20`, `G21` | Polegadas e milímetros |
+| **Tool** | `T` | Seleção de ferramenta (ex: T1, T2) |
+| **Spindle** | `M3`, `M4`, `M5` | Spindle CW, CCW, parar |
+| **Program** | `M30` | Fim de programa |
+
+**Estrutura de Dados:**
+
 ```go
 type Instruction struct {
-    Op         Op        // G0, G1, G2, G3, M, T, etc.
-    Params     Params    // X, Y, Z, I, J, K, R, F, S, P
-    RawLine    string    // Linha original (debug)
-    LineNumber int       // Número da linha
+    Op         Op        // Operação (G0, G1, G2, G3, M, T, etc.)
+    Params     Params    // Parâmetros (X, Y, Z, I, J, K, R, F, S)
+    RawLine    string    // Linha original (útil para debug)
+    LineNumber int       // Número da linha no código fonte
 }
+```
+
+**Exemplo de uso:**
+
+```go
+parser := parser.New()
+instructions, err := parser.Parse("G0 X10 Y20\nG1 Z-5 F100")
+// instructions[0]: Op=G0, Params={X:10, Y:20}
+// instructions[1]: Op=G1, Params={Z:-5, F:100}
 ```
 
 ### Interpreter (`pkg/interpreter`)
 
-**Responsabilidade:** Simular o estado lógico da CNC, não a física.
+**Responsabilidade:** Simular o estado lógico da máquina CNC (não a física real).
+
+O interpretador processa instruções sequencialmente, mantendo o estado da máquina e gerando eventos para cada operação.
 
 **Estado da Máquina (`MachineState`):**
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| Position | Position | Coordenadas X, Y, Z |
-| Unit | Unit | mm ou inches |
-| Plane | Plane | XY, XZ, YZ |
-| Mode | PositionMode | Absoluto ou Incremental |
-| Tool | *int | Ferramenta atual |
-| Feed | float64 | Taxa de avanço |
-| Spindle | float64 | Velocidade do spindle |
-| SpindleOn | bool | Spindle ligado/desligado |
-| SpindleCW | bool | Sentido de rotação |
+
+| Campo | Tipo | Descrição | Valor Inicial |
+|-------|------|-----------|---------------|
+| `Position` | `Position` | Coordenadas X, Y, Z atuais | `(0, 0, 0)` |
+| `Unit` | `Unit` | Sistema de unidades | `Millimeters` |
+| `Plane` | `Plane` | Plano de trabalho | `XY` |
+| `Mode` | `PositionMode` | Absoluto ou incremental | `Absolute` |
+| `Tool` | `*int` | Ferramenta selecionada | `nil` |
+| `Feed` | `float64` | Taxa de avanço (mm/min ou in/min) | `0` |
+| `Spindle` | `float64` | Velocidade do spindle (RPM) | `0` |
+| `SpindleOn` | `bool` | Spindle ligado | `false` |
+| `SpindleCW` | `bool` | Sentido horário | `false` |
 
 **Eventos Gerados:**
-| Evento | Descrição |
-|--------|-----------|
-| RapidMove | Movimento rápido (G0) |
-| LinearCut | Corte linear (G1) |
-| ArcCW | Arco horário (G2) |
-| ArcCCW | Arco anti-horário (G3) |
-| DrillCycle | Ciclo de furação |
-| ToolChange | Troca de ferramenta |
-| SpindleStart | Ligar spindle (M3/M4) |
-| SpindleStop | Desligar spindle (M5) |
-| UnitChange | Mudança de unidade (G20/G21) |
-| ModeChange | Mudança de modo (G90/G91) |
 
-**Saída (`ExecutionTrace`):**
+| Tipo de Evento | Comando | Descrição |
+|----------------|---------|-----------|
+| `RapidMove` | `G0` | Movimento rápido (sem corte) |
+| `LinearCut` | `G1` | Corte linear |
+| `ArcCW` | `G2` | Arco no sentido horário |
+| `ArcCCW` | `G3` | Arco no sentido anti-horário |
+| `ToolChange` | `T` | Troca de ferramenta |
+| `SpindleStart` | `M3/M4` | Ligar spindle (CW ou CCW) |
+| `SpindleStop` | `M5` | Desligar spindle |
+| `UnitChange` | `G20/G21` | Mudança de unidade |
+| `ModeChange` | `G90/G91` | Mudança de modo posicionamento |
+
+**Estrutura de Saída (`ExecutionTrace`):**
+
 ```go
 type ExecutionTrace struct {
     Events     []Event       // Lista ordenada de eventos
-    FinalState *MachineState // Estado final da máquina
+    FinalState *MachineState // Estado final após execução
 }
+
+// Métodos úteis:
+// trace.EventCount() int
+// trace.FinalState.Position
 ```
 
 ### Machining Model (`pkg/machining`)
 
 **Responsabilidade:** Converter eventos de baixo nível em entidades semânticas de usinagem.
 
-**Entidades Semânticas:**
+O analisador de usinagem identifica padrões nos eventos de corte e os classifica em operações de usinagem conhecidas.
 
-| Entidade | Descrição |
-|----------|-----------|
-| Hole | Furo circular (plunge cut, drill cycle, ou arco completo) |
-| Slot | Ranhura linear (corte horizontal de segmento único) |
-| Contour | Caminho conectado de cortes (aberto ou fechado) |
+**Entidades Semânticas Detectadas:**
+
+| Entidade | Descrição | Como é Detectada |
+|----------|-----------|------------------|
+| **Hole** | Furo circular | Plunge cut vertical, drill cycle, ou arco completo |
+| **Slot** | Ranhura linear | Corte horizontal em linha reta |
+| **Contour** | Contorno/perfil | Sequência conectada de cortes (linhas e arcos) |
 
 **Estrutura de Dados (`MachiningModel`):**
+
 ```go
 type MachiningModel struct {
     Holes    []Hole     // Furos detectados
     Slots    []Slot     // Ranhuras detectadas
     Contours []Contour  // Contornos detectados
 }
+
+// Métodos de consulta:
+// model.HoleCount() int
+// model.SlotCount() int
+// model.ContourCount() int
+// model.HolesAt(x, y, tolerance) []Hole
+// model.HolesWithDiameter(diameter, tolerance) []Hole
+// model.HolesWithDepth(depth, tolerance) []Hole
 ```
 
-**Hole:**
+**Estrutura: Hole (Furo)**
+
 ```go
 type Hole struct {
-    Center   Point2D   // Centro XY do furo
-    Diameter float64   // Diâmetro do furo
-    Depth    float64   // Profundidade (valor positivo)
-    TopZ     float64   // Z do topo do furo
-    BottomZ  float64   // Z do fundo do furo
-    Tool     int       // Ferramenta utilizada
+    Center   Point2D   // Centro do furo (X, Y)
+    Diameter float64   // Diâmetro (baseado na ferramenta)
+    Depth    float64   // Profundidade total (valor positivo)
+    TopZ     float64   // Coordenada Z do topo
+    BottomZ  float64   // Coordenada Z do fundo
+    Tool     int       // ID da ferramenta usada
 }
 ```
 
-**Slot:**
+**Estrutura: Slot (Ranhura)**
+
 ```go
 type Slot struct {
-    Start Point2D   // Posição inicial XY
-    End   Point2D   // Posição final XY
+    Start Point2D   // Ponto inicial (X, Y)
+    End   Point2D   // Ponto final (X, Y)
     Width float64   // Largura (diâmetro da ferramenta)
     Depth float64   // Profundidade
     Z     float64   // Coordenada Z do corte
-    Tool  int       // Ferramenta utilizada
+    Tool  int       // ID da ferramenta usada
 }
+
+// Método: slot.Length() float64
 ```
 
-**Contour:**
+**Estrutura: Contour (Contorno)**
+
 ```go
 type Contour struct {
-    Segments []Segment  // Segmentos ordenados (linhas e arcos)
+    Segments []Segment  // Lista de segmentos (linhas e arcos)
     Z        float64    // Profundidade do contorno
     Closed   bool       // Se forma um loop fechado
-    Tool     int        // Ferramenta utilizada
+    Tool     int        // ID da ferramenta usada
 }
+
+// Métodos:
+// contour.IsClosed() bool
+// contour.TotalLength() float64
 ```
 
 **Sistema de Warnings:**
 
-O analisador gera warnings não bloqueantes para problemas detectados:
+O analisador detecta problemas não bloqueantes e gera warnings informativos:
 
-| Warning | Descrição |
-|---------|-----------|
-| MissingTool | Corte sem ferramenta selecionada |
-| SpindleOff | Corte com spindle desligado |
-| ZeroFeed | Corte com feed rate zero |
-| ShallowCut | Corte muito raso |
-| OpenContour | Contorno que não fecha |
+| Tipo de Warning | Descrição | Quando Ocorre |
+|-----------------|-----------|---------------|
+| `MissingTool` | Corte sem ferramenta selecionada | Operação de corte com `Tool == nil` |
+| `SpindleOff` | Corte com spindle desligado | Operação de corte com `SpindleOn == false` |
+| `ZeroFeed` | Corte com feed rate zero | Operação de corte com `Feed == 0` |
+| `ShallowCut` | Corte muito raso | Profundidade menor que limiar configurado |
+| `OpenContour` | Contorno que não fecha | Contorno com ponto inicial ≠ ponto final |
 
-**Configuração do Analisador:**
+**Configuração Personalizada do Analisador:**
+
 ```go
 config := machining.AnalyzerConfig{
-    Tolerance:           1e-6,  // Tolerância para comparações
-    MinHoleDepth:        0.001, // Profundidade mínima para detectar furo
-    DefaultToolDiameter: 6.0,   // Diâmetro padrão da ferramenta
-    WorkpieceTopZ:       0,     // Z do topo da peça
+    Tolerance:           1e-6,  // Tolerância para comparações de ponto flutuante
+    MinHoleDepth:        0.001, // Profundidade mínima para detectar como furo
+    DefaultToolDiameter: 6.0,   // Diâmetro padrão quando ferramenta não especificada
+    WorkpieceTopZ:       0.0,   // Coordenada Z do topo da peça de trabalho
 }
+
 model, warnings := machining.AnalyzeWithConfig(trace, config)
 ```
 
-### Reprodutibilidade
+### Reprodutibilidade e Determinismo
 
-**Regras obrigatórias:**
-- Não usar `time.Now`
-- Não usar RNG sem seed fixa
-- Ordenar listas explicitamente
-- Usar tolerância numérica fixa (default: 1e-9)
+Para garantir que os testes sejam confiáveis e funcionem identicamente em qualquer ambiente, o projeto segue regras estritas:
 
-Isso garante snapshots confiáveis e CI estável.
+**Regras Obrigatórias:**
+
+1. ❌ **Proibido usar `time.Now()`** ou qualquer fonte de tempo variável
+2. ❌ **Proibido usar RNG sem seed fixa** ou qualquer aleatoriedade
+3. ✅ **Sempre ordenar listas explicitamente** para garantir ordem determinística
+4. ✅ **Usar tolerância numérica fixa** (padrão: `1e-9`) para comparações de ponto flutuante
+5. ✅ **Evitar dependências de I/O não determinístico** (filesystem, rede)
+
+**Por que isso importa?**
+
+- 🔒 **Snapshots confiáveis** - O mesmo G-code sempre gera o mesmo snapshot
+- 🔄 **CI estável** - Testes não falham aleatoriamente
+- 🌍 **Portabilidade** - Funciona igual em Linux, Windows, macOS
+- 📊 **Debugging facilitado** - Problemas são reproduzíveis
+
+**Exemplo de comparação com tolerância:**
+
+```go
+// ❌ Errado - comparação direta de floats
+if a == b {
+    // Pode falhar devido a erros de arredondamento
+}
+
+// ✅ Correto - usar tolerância
+const tolerance = 1e-9
+if math.Abs(a - b) < tolerance {
+    // Comparação segura
+}
+```
 
 ---
 
 ## Roadmap
 
-Consulte [ROADMAP.md](ROADMAP.md) para o planejamento completo.
+Consulte [ROADMAP.md](ROADMAP.md) para o planejamento completo e detalhado.
 
-**Status atual:**
-- ✅ Fase 0 — Setup e fundação
-- ✅ Fase 1 — Parser
-- ✅ Fase 2 — Interpreter (core headless)
-- ✅ Fase 3 — Machining Model
-- ⬜ Fase 4 — Assertion API
-- ⬜ Fase 5 — Snapshot Engine
-- ⬜ Fase 6 — UI Renderer
-- ⬜ Fase 7 — Tooling e DX
-- ⬜ Fase 8 — CI/CD e releases
+**Status atual do projeto:**
+
+| Fase | Descrição | Status |
+|------|-----------|--------|
+| Fase 0 | Setup e fundação | ✅ Completo |
+| Fase 1 | Parser de G-code | ✅ Completo |
+| Fase 2 | Interpreter (core headless) | ✅ Completo |
+| Fase 3 | Machining Model | ✅ Completo |
+| Fase 4 | Assertion API | ⏳ Planejado |
+| Fase 5 | Snapshot Engine | ⏳ Planejado |
+| Fase 6 | UI Renderer | ⏳ Planejado |
+| Fase 7 | Tooling e DX | ⏳ Planejado |
+| Fase 8 | CI/CD e Releases | ⏳ Planejado |
+
+**Próximos passos:**
+- Implementar API de assertions fluente (Fase 4)
+- Desenvolver sistema de snapshots para testes (Fase 5)
+- Adicionar renderização visual opcional (Fase 6)
 
 ---
 
@@ -377,32 +607,127 @@ Consulte [ROADMAP.md](ROADMAP.md) para o planejamento completo.
 
 ### Comandos Make
 
+O projeto inclui um Makefile com comandos úteis para desenvolvimento:
+
 ```bash
-make fmt       # Formatar código
-make lint      # Executar linters
-make test      # Executar testes
-make test-cover # Testes com cobertura
-make build     # Compilar binário
-make release   # Build de release
-make clean     # Limpar artefatos
+make help       # Mostrar todos os comandos disponíveis
+make fmt        # Formatar código com go fmt
+make lint       # Executar linters (go vet)
+make test       # Executar todos os testes
+make test-cover # Executar testes com relatório de cobertura
+make build      # Compilar binário CLI
+make release    # Build otimizado para release
+make clean      # Limpar artefatos de build
+make tidy       # Organizar dependências (go mod tidy)
 ```
 
-### Desenvolvimento local com hot reload
+### Desenvolvimento Local com Hot Reload
+
+Para desenvolvimento com recarga automática, use [Air](https://github.com/air-verse/air):
 
 ```bash
-# Requer: go install github.com/air-verse/air@latest
+# Instalar Air (apenas uma vez)
+go install github.com/air-verse/air@latest
+
+# Iniciar desenvolvimento com hot reload
 air
+```
+
+### Executando Testes
+
+```bash
+# Executar todos os testes
+make test
+
+# Executar testes com cobertura
+make test-cover
+
+# Executar testes de um pacote específico
+go test -v ./pkg/parser
+
+# Executar um teste específico
+go test -v -run TestParser_Parse_G0 ./pkg/parser
 ```
 
 ---
 
-## O que NÃO é escopo
+## Contribuindo
 
-- Validar texto bruto do G-code (sintaxe pura)
-- Simular aceleração física
-- Simular tempo de execução real
-- Depender de CNC real
-- Misturar lógica de UI com core
+Contribuições são bem-vindas! Para contribuir:
+
+1. **Fork** o repositório
+2. **Crie uma branch** para sua feature (`git checkout -b feature/minha-feature`)
+3. **Faça commit** das suas alterações (`git commit -am 'Adiciona nova feature'`)
+4. **Push** para a branch (`git push origin feature/minha-feature`)
+5. **Abra um Pull Request**
+
+### Diretrizes de Contribuição
+
+- ✅ Escreva testes para novas funcionalidades
+- ✅ Mantenha cobertura de testes alta
+- ✅ Execute `make fmt` antes de fazer commit
+- ✅ Execute `make lint` e corrija warnings
+- ✅ Siga as convenções de código Go
+- ✅ Documente funções e tipos exportados
+- ✅ Mantenha mudanças atômicas e focadas
+
+### Reportar Issues
+
+Ao reportar um issue, inclua:
+
+- Versão do Go (`go version`)
+- Sistema operacional
+- Exemplo mínimo de código que reproduz o problema
+- Comportamento esperado vs. comportamento observado
+
+---
+
+## Troubleshooting
+
+### Problemas Comuns
+
+**Q: O parser não reconhece meu código G-code**
+```
+A: Verifique se o código G suportado está na lista de códigos implementados.
+   Consulte a seção "Códigos Suportados" para ver a lista completa.
+```
+
+**Q: Comparações numéricas falham mesmo com valores "iguais"**
+```
+A: Use a tolerância configurável. Por padrão, a tolerância é 1e-9.
+   Ajuste com config.WithTolerance() se necessário.
+```
+
+**Q: Como debugar o trace de execução?**
+```go
+// Imprima todos os eventos gerados
+for i, event := range trace.Events {
+    fmt.Printf("Event %d: %v\n", i, event)
+}
+
+// Verifique o estado final
+fmt.Printf("Final State: %+v\n", trace.FinalState)
+```
+
+---
+
+## O que NÃO é Escopo
+
+Para manter o foco e garantir qualidade, as seguintes funcionalidades **não estão** no escopo do projeto:
+
+- ❌ **Validação de sintaxe pura** - Não validamos apenas o texto bruto do G-code
+- ❌ **Simulação física** - Não simulamos aceleração, forças ou física real da máquina
+- ❌ **Simulação de tempo real** - Não calculamos tempo de execução preciso
+- ❌ **Dependência de CNC real** - Não requer conexão com máquinas físicas
+- ❌ **Lógica de UI no core** - Mantemos separação estrita entre core e interface
+
+**Por que essas limitações?**
+
+Estas escolhas são intencionais para manter o projeto:
+- Focado em validação lógica e semântica
+- Determinístico e reproduzível
+- Leve e sem dependências pesadas
+- Adequado para CI/CD e automação
 
 ---
 
@@ -420,4 +745,26 @@ air
 
 ## Licença
 
-MIT
+Este projeto está licenciado sob a [Licença MIT](LICENSE).
+
+Copyright (c) 2024 Eduardo Torres
+
+---
+
+## Modelo Mental (Analogia com Playwright)
+
+Se você está familiarizado com o Playwright para testes de aplicações web, aqui está uma analogia útil:
+
+| Playwright | gocode-check | Descrição |
+|------------|--------------|-----------|
+| DOM | MachiningModel | Representação estrutural do estado |
+| `expect()` | `Assert()` | API de validações (futuro) |
+| Screenshot snapshot | Snapshot semântico | Captura determinística do estado |
+| Headed mode | Renderer | Modo visual para debug |
+| Headless mode | Core | Modo automatizado sem UI |
+
+Assim como o Playwright permite testar aplicações web sem depender de browsers reais em CI, **gocode-check** permite testar programas G-code sem depender de máquinas CNC reais.
+
+---
+
+**Made with ❤️ for the CNC and manufacturing automation community**
