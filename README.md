@@ -82,6 +82,56 @@ func main() {
 trace, err := interpreter.ParseAndInterpret(gcode)
 ```
 
+### Machining Model
+
+O Machining Model converte eventos de baixo nível em entidades semânticas de usinagem:
+
+```go
+import (
+    "github.com/eduardotorresdev/gocode-check/pkg/interpreter"
+    "github.com/eduardotorresdev/gocode-check/pkg/machining"
+)
+
+func main() {
+    gcode := `
+        G21
+        G90
+        T1
+        G0 X50 Y50 Z5
+        G1 Z-10 F100
+        G0 Z5
+        G0 X0 Y0
+        G1 Z-5 F100
+        G1 X100 F200
+    `
+    
+    // Parse and interpret
+    trace, _ := interpreter.ParseAndInterpret(gcode)
+    
+    // Analyze to get machining model
+    model, warnings := machining.Analyze(trace)
+    
+    // Access semantic features
+    fmt.Printf("Holes: %d\n", model.HoleCount())
+    fmt.Printf("Slots: %d\n", model.SlotCount())
+    fmt.Printf("Contours: %d\n", model.ContourCount())
+    
+    // Query specific holes
+    holes := model.HolesAt(50, 50, 0.001)
+    for _, hole := range holes {
+        fmt.Printf("Hole at (%.2f, %.2f) depth=%.2f\n",
+            hole.Center.X, hole.Center.Y, hole.Depth)
+    }
+    
+    // Check for warnings
+    if !warnings.IsEmpty() {
+        for _, w := range warnings {
+            fmt.Printf("Warning: %s\n", w)
+        }
+    }
+}
+```
+
 ### Configuração
 
 ```go
@@ -119,7 +169,7 @@ string G-code
 └──────┬───────┘
        ↓
 ┌─────────────────┐
-│ Machining Model │  → Holes, Slots, Contours (futuro)
+│ Machining Model │  → Holes, Slots, Contours
 └────────┬────────┘
          ↓
 ┌────────────────┐
@@ -144,7 +194,8 @@ gocode-check/
 │   └── config/          # Configurações globais
 └── pkg/
     ├── parser/          # Parser de G-code
-    └── interpreter/     # Interpretador de estado
+    ├── interpreter/     # Interpretador de estado
+    └── machining/       # Modelo semântico de usinagem
 ```
 
 ### Parser (`pkg/parser`)
@@ -215,6 +266,84 @@ type ExecutionTrace struct {
 }
 ```
 
+### Machining Model (`pkg/machining`)
+
+**Responsabilidade:** Converter eventos de baixo nível em entidades semânticas de usinagem.
+
+**Entidades Semânticas:**
+
+| Entidade | Descrição |
+|----------|-----------|
+| Hole | Furo circular (plunge cut, drill cycle, ou arco completo) |
+| Slot | Ranhura linear (corte horizontal de segmento único) |
+| Contour | Caminho conectado de cortes (aberto ou fechado) |
+
+**Estrutura de Dados (`MachiningModel`):**
+```go
+type MachiningModel struct {
+    Holes    []Hole     // Furos detectados
+    Slots    []Slot     // Ranhuras detectadas
+    Contours []Contour  // Contornos detectados
+}
+```
+
+**Hole:**
+```go
+type Hole struct {
+    Center   Point2D   // Centro XY do furo
+    Diameter float64   // Diâmetro do furo
+    Depth    float64   // Profundidade (valor positivo)
+    TopZ     float64   // Z do topo do furo
+    BottomZ  float64   // Z do fundo do furo
+    Tool     int       // Ferramenta utilizada
+}
+```
+
+**Slot:**
+```go
+type Slot struct {
+    Start Point2D   // Posição inicial XY
+    End   Point2D   // Posição final XY
+    Width float64   // Largura (diâmetro da ferramenta)
+    Depth float64   // Profundidade
+    Z     float64   // Coordenada Z do corte
+    Tool  int       // Ferramenta utilizada
+}
+```
+
+**Contour:**
+```go
+type Contour struct {
+    Segments []Segment  // Segmentos ordenados (linhas e arcos)
+    Z        float64    // Profundidade do contorno
+    Closed   bool       // Se forma um loop fechado
+    Tool     int        // Ferramenta utilizada
+}
+```
+
+**Sistema de Warnings:**
+
+O analisador gera warnings não bloqueantes para problemas detectados:
+
+| Warning | Descrição |
+|---------|-----------|
+| MissingTool | Corte sem ferramenta selecionada |
+| SpindleOff | Corte com spindle desligado |
+| ZeroFeed | Corte com feed rate zero |
+| ShallowCut | Corte muito raso |
+| OpenContour | Contorno que não fecha |
+
+**Configuração do Analisador:**
+```go
+config := machining.AnalyzerConfig{
+    Tolerance:           1e-6,  // Tolerância para comparações
+    MinHoleDepth:        0.001, // Profundidade mínima para detectar furo
+    DefaultToolDiameter: 6.0,   // Diâmetro padrão da ferramenta
+    WorkpieceTopZ:       0,     // Z do topo da peça
+}
+model, warnings := machining.AnalyzeWithConfig(trace, config)
+```
+
 ### Reprodutibilidade
 
 **Regras obrigatórias:**
@@ -235,7 +364,7 @@ Consulte [ROADMAP.md](ROADMAP.md) para o planejamento completo.
 - ✅ Fase 0 — Setup e fundação
 - ✅ Fase 1 — Parser
 - ✅ Fase 2 — Interpreter (core headless)
-- ⬜ Fase 3 — Machining Model
+- ✅ Fase 3 — Machining Model
 - ⬜ Fase 4 — Assertion API
 - ⬜ Fase 5 — Snapshot Engine
 - ⬜ Fase 6 — UI Renderer
