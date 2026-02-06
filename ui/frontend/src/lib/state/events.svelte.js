@@ -1,9 +1,9 @@
-// Estado dos eventos de execução
+// Execution events state
 
 let eventList = $state([]);
 let currentIndex = $state(-1);
 
-// Estatísticas derivadas
+// Derived statistics
 const stats = $derived({
   total: eventList.length,
   rapidMoves: eventList.filter(e => e.event?.Type === 'RapidMove').length,
@@ -11,7 +11,7 @@ const stats = $derived({
   arcs: eventList.filter(e => e.event?.Type === 'ArcCW' || e.event?.Type === 'ArcCCW').length,
 });
 
-// Caminho da ferramenta para visualização 3D
+// Tool path for 3D visualization
 const toolPath = $derived(
   eventList.map(e => ({
     x: e.stateAfter?.Position?.X ?? 0,

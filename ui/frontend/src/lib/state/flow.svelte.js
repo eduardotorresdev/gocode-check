@@ -1,4 +1,4 @@
-// Estado do controle de fluxo (play/pause/step)
+// Flow control state (play/pause/step)
 
 let flowState = $state({
   state: 'playing', // 'playing' | 'paused' | 'stepping'

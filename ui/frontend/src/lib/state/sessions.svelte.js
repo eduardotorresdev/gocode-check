@@ -1,10 +1,10 @@
-// Estado das sessões de teste (tabs)
+// Test session state (tabs)
 
 let sessionList = $state([]);
 let activeSessionId = $state(null);
 let sessionIdCounter = $state(0);
 
-// Criar estrutura de sessão
+// Create session structure
 function createSession(testName) {
   return {
     id: ++sessionIdCounter,
@@ -35,7 +35,7 @@ export const sessions = {
   },
   get count() { return sessionList.length; },
 
-  // Criar nova sessão
+  // Create new session
   create(testName) {
     const session = createSession(testName);
     sessionList.push(session);
@@ -43,14 +43,14 @@ export const sessions = {
     return session.id;
   },
 
-  // Selecionar sessão ativa
+  // Select active session
   setActive(sessionId) {
     if (sessionList.some(s => s.id === sessionId)) {
       activeSessionId = sessionId;
     }
   },
 
-  // Adicionar evento à sessão ativa
+  // Add event to active session
   addEvent(event) {
     const session = this.active;
     if (session) {
@@ -59,7 +59,7 @@ export const sessions = {
     }
   },
 
-  // Adicionar expectativa à sessão ativa
+  // Add expectation to active session
   addExpectation(expectation) {
     const session = this.active;
     if (session) {
@@ -67,7 +67,7 @@ export const sessions = {
     }
   },
 
-  // Atualizar estado da máquina na sessão ativa
+  // Update machine state in active session
   updateMachine(newState) {
     const session = this.active;
     if (session && newState) {
@@ -84,7 +84,7 @@ export const sessions = {
     }
   },
 
-  // Marcar sessão atual como finalizada
+  // Mark current session as finished
   endSession(allPassed) {
     const session = this.active;
     if (session) {
@@ -93,7 +93,7 @@ export const sessions = {
     }
   },
 
-  // Definir índice atual na sessão ativa
+  // Set current index in active session
   setCurrentIndex(index) {
     const session = this.active;
     if (session) {
@@ -101,14 +101,14 @@ export const sessions = {
     }
   },
 
-  // Limpar todas as sessões
+  // Clear all sessions
   clear() {
     sessionList.length = 0;
     activeSessionId = null;
     sessionIdCounter = 0;
   },
 
-  // Remover sessão específica
+  // Remove specific session
   remove(sessionId) {
     const index = sessionList.findIndex(s => s.id === sessionId);
     if (index >= 0) {

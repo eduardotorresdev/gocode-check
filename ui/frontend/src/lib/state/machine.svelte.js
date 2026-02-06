@@ -1,4 +1,4 @@
-// Estado da máquina CNC
+// CNC machine state
 
 let state = $state({
   position: { X: 0, Y: 0, Z: 0 },
@@ -21,7 +21,7 @@ export const machine = {
   get spindleOn() { return state.spindleOn; },
   get spindleCW() { return state.spindleCW; },
   
-  // Getter para o estado completo (útil para componentes)
+  // Getter for full state (useful for components)
   get state() { return state; },
   
   update(newState) {

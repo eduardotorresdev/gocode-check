@@ -1,4 +1,4 @@
-// Estado das expectations
+// Expectations state
 
 let expectationList = $state([]);
 let testInfo = $state({
@@ -7,7 +7,7 @@ let testInfo = $state({
   allPassed: null,
 });
 
-// Estatísticas derivadas
+// Derived statistics
 const stats = $derived({
   total: expectationList.length,
   passed: expectationList.filter(e => e.passed).length,
