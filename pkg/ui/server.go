@@ -277,6 +277,8 @@ func (s *Server) handleClientCommand(cmd Message) {
 		s.logger.Debug("Resume requested")
 		if s.flow != nil {
 			s.flow.Resume()
+			// When resuming, jump to event 0 of current tab
+			s.flow.JumpTo(0)
 			s.Broadcast(Message{
 				Type: "flow_state",
 				Data: map[string]interface{}{
@@ -303,6 +305,18 @@ func (s *Server) handleClientCommand(cmd Message) {
 					s.flow.JumpTo(int(index))
 				}
 			}
+		}
+	case "tab_switch":
+		// Tab switching should pause the flow
+		s.logger.Debug("Tab switch requested")
+		if s.flow != nil && s.flow.State() == FlowPlaying {
+			s.flow.Pause()
+			s.Broadcast(Message{
+				Type: "flow_state",
+				Data: map[string]interface{}{
+					"state": "paused",
+				},
+			})
 		}
 	}
 }

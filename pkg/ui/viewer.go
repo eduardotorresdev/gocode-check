@@ -106,26 +106,26 @@ func Enable(cfg Config) func() {
 				return
 			}
 
-			logger.Info("Shutting down UI server...")
+			logger.Info("UI server will continue running...")
+			logger.Info("You can close the browser and reopen it at %s to view the results.", globalViewer.server.URL())
+			logger.Info("Press Ctrl+C to stop the server when you're done.")
 
-			// Unregister observers
+			// Unregister observers but keep server running
 			interpreter.UnregisterObserver(globalViewer.observer)
 			assert.UnregisterObserver(globalViewer.observer)
 
-			// Cancel context (stops server)
-			cancel()
+			// DO NOT cancel context or stop server - let it keep running
+			// Users can manually close the browser and reopen to see results
+
+			// Note: We intentionally don't call cancel() here to keep the server alive
+			// The server will continue running until the process exits
 
 			// Clear browser lock file
 			ClearBrowserLock()
 
-			logger.Success("UI server stopped.")
+			logger.Success("Test execution complete. Server still running.")
 
-			globalViewer = nil
-			// Reset once for potential re-enable.
-			// Note: This reset is protected by mu.Lock() above, making it safe
-			// for sequential test execution. In production, Enable() is typically
-			// called only once in TestMain, so this reset is primarily for testing.
-			once = sync.Once{}
+			// Don't clear globalViewer or reset once - keep server alive
 		}
 	})
 

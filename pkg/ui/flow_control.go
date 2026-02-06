@@ -30,7 +30,7 @@ type FlowController struct {
 // NewFlowController creates a new flow controller.
 func NewFlowController() *FlowController {
 	return &FlowController{
-		state:        FlowPlaying,
+		state:        FlowPaused, // Start paused, waiting for user to click play
 		stepSignal:   make(chan struct{}, 1),
 		currentIndex: 0,
 		targetIndex:  -1,
