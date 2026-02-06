@@ -1,4 +1,4 @@
-.PHONY: fmt lint test snapshot release build clean help
+.PHONY: fmt lint test snapshot release build clean help ui-install ui-dev ui-build ui-test test-ui-package examples examples-ui
 
 # Default target
 .DEFAULT_GOAL := help
@@ -60,6 +60,43 @@ clean:
 tidy:
 	@echo "Tidying modules..."
 	$(GOMOD) tidy
+
+# ============================================================================
+# UI Targets
+# ============================================================================
+
+## ui-install: Install frontend dependencies
+ui-install:
+	cd ui/frontend && npm install
+
+## ui-dev: Run frontend in development mode
+ui-dev:
+	cd ui/frontend && npm run dev
+
+## ui-build: Build frontend for production
+ui-build:
+	cd ui/frontend && npm install && npm run build
+	rm -rf pkg/ui/static/*
+	cp -r ui/frontend/dist/* pkg/ui/static/
+	@echo "✓ Frontend built and copied to pkg/ui/static/"
+
+## ui-test: Run tests with UI enabled
+ui-test:
+	GOCODECHECK_UI=1 $(GOTEST) -v -p 1 ./...
+
+## test-ui-package: Run UI package tests
+test-ui-package:
+	$(GOTEST) -v ./pkg/ui/...
+
+## examples: Run example tests
+examples:
+	@echo "Running examples..."
+	$(GOTEST) -v ./examples/...
+
+## examples-ui: Run examples with UI visualization
+examples-ui:
+	@echo "Running examples with UI visualization..."
+	GOCODECHECK_UI=1 $(GOTEST) -v -p 1 ./examples/...
 
 ## help: Show this help message
 help:

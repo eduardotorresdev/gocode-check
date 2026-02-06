@@ -32,14 +32,56 @@ func (i *Interpreter) Interpret(instructions []parser.Instruction) (*ExecutionTr
 	i.state = NewMachineState()
 	i.trace = NewExecutionTrace()
 
-	for _, instr := range instructions {
-		if err := i.execute(instr); err != nil {
-			return nil, fmt.Errorf("line %d: %w", instr.LineNumber, err)
+	// Notify observers that interpretation is starting
+	notifyInterpretStart(InterpretStartEvent{
+		TotalInstructions: len(instructions),
+		Instructions:      instructions,
+	})
+
+	for idx, instr := range instructions {
+		// Capture state before execution
+		stateBefore := i.state.Clone()
+		eventCountBefore := len(i.trace.Events)
+
+		err := i.execute(instr)
+
+		// Get the event that was generated (if any)
+		var event Event
+		if len(i.trace.Events) > eventCountBefore {
+			event = i.trace.Events[len(i.trace.Events)-1]
+		}
+
+		// Notify observers of the step (even on error)
+		notifyStep(StepEvent{
+			Index:       idx,
+			Instruction: instr,
+			Event:       event,
+			StateBefore: stateBefore,
+			StateAfter:  i.state.Clone(),
+			Error:       err,
+		})
+
+		if err != nil {
+			wrappedErr := fmt.Errorf("line %d: %w", instr.LineNumber, err)
+			// Notify observers of interpretation end with error
+			notifyInterpretEnd(InterpretEndEvent{
+				Trace:      i.trace,
+				FinalState: i.state.Clone(),
+				Error:      wrappedErr,
+			})
+			return nil, wrappedErr
 		}
 	}
 
 	// Set final state
 	i.trace.FinalState = i.state.Clone()
+
+	// Notify observers of successful interpretation end
+	notifyInterpretEnd(InterpretEndEvent{
+		Trace:      i.trace,
+		FinalState: i.state.Clone(),
+		Error:      nil,
+	})
 
 	return i.trace, nil
 }

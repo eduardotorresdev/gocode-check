@@ -1,0 +1,121 @@
+# gocode-check Examples
+
+This folder contains example test programs demonstrating how to use gocode-check to validate G-code programs with real-time UI visualization.
+
+## Running Examples
+
+All examples can be run with or without the UI visualization:
+
+### Without UI (Normal test execution)
+```bash
+go test -v ./examples/...
+```
+
+### With UI (Real-time visualization)
+```bash
+GOCODECHECK_UI=1 go test -v ./examples/...
+```
+
+When UI is enabled, a browser window will automatically open showing the 3D visualization of the CNC machining operations.
+
+## Example Projects
+
+### 1. Basic Holes (`examples/basic_holes`)
+
+Demonstrates hole drilling validation:
+- Single hole drilling
+- Multi-hole grid patterns
+- Hole depth and diameter validation
+- Tool selection verification
+
+```bash
+GOCODECHECK_UI=1 go test -v ./examples/basic_holes
+```
+
+### 2. Slots and Contours (`examples/slots_and_contours`)
+
+Demonstrates linear and contour operations:
+- Horizontal and vertical slot cutting
+- Square and triangle contour milling
+- Open vs closed contour detection
+- Multiple parallel slots
+
+```bash
+GOCODECHECK_UI=1 go test -v ./examples/slots_and_contours
+```
+
+### 3. Complete Part (`examples/complete_part`)
+
+Demonstrates complex multi-feature validation:
+- Complete bracket with mounting holes, adjustment slot, and pocket outline
+- Circular flange with bolt hole patterns
+- Keyway cutting operations
+- Work envelope bounds checking
+
+```bash
+GOCODECHECK_UI=1 go test -v ./examples/complete_part
+```
+
+## UI Configuration
+
+The examples demonstrate different UI speed configurations:
+
+```go
+// Normal speed (default: 200ms delay between steps)
+cleanup := ui.Enable(ui.DefaultConfig().
+    WithSpeed(ui.SpeedNormal))
+
+// Slow speed (500ms delay - better for learning/demos)
+cleanup := ui.Enable(ui.DefaultConfig().
+    WithSpeed(ui.SpeedSlow))
+
+// Fast speed (50ms delay - for quick validation)
+cleanup := ui.Enable(ui.DefaultConfig().
+    WithSpeed(ui.SpeedFast))
+```
+
+## Creating Your Own Tests
+
+Use these examples as templates. The basic pattern is:
+
+```go
+func TestMain(m *testing.M) {
+    if os.Getenv("GOCODECHECK_UI") != "" {
+        cleanup := ui.Enable(ui.DefaultConfig())
+        defer cleanup()
+    }
+    os.Exit(m.Run())
+}
+
+func TestMyGCode(t *testing.T) {
+    gcode := `G21
+    G90
+    ; ... your G-code ...`
+    
+    trace, err := interpreter.ParseAndInterpret(gcode)
+    if err != nil {
+        t.Fatalf("parse error: %v", err)
+    }
+    
+    model, _ := machining.Analyze(trace)
+    
+    assert.Expect(trace, model).
+        HasHole(x, y).
+        WithDepth(depth).
+        Assert(t)
+}
+```
+
+## Available Assertions
+
+- `HasHole(x, y)` - Hole exists at position
+- `HasHoleCount(n)` - Exact number of holes
+- `HasSlot(x1, y1, x2, y2)` - Slot from point to point
+- `HasSlotCount(n)` - Exact number of slots
+- `HasContour()` - Contour path exists
+- `IsClosed()` / `IsOpen()` - Contour closure
+- `HasSegmentCount(n)` - Number of contour segments
+- `NoOperationOutside(bounds)` - Work envelope validation
+- `WithDepth(d)` - Hole/feature depth
+- `WithDiameter(d)` - Hole diameter
+- `WithTool(n)` - Tool number used

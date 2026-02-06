@@ -8,21 +8,21 @@ import (
 	"github.com/eduardotorresdev/gocode-check/pkg/machining"
 )
 
-// Helper to create a model from G-code
-func modelFromGCode(t *testing.T, gcode string) *machining.MachiningModel {
+// Helper to create a trace and model from G-code
+func traceAndModelFromGCode(t *testing.T, gcode string) (*interpreter.ExecutionTrace, *machining.MachiningModel) {
 	t.Helper()
 	trace, err := interpreter.ParseAndInterpret(gcode)
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 	model, _ := machining.Analyze(trace)
-	return model
+	return trace, model
 }
 
 // --- Basic Tests ---
 
 func TestExpect_NilModel(t *testing.T) {
-	result := Expect(nil).HasHole(0, 0)
+	result := Expect(nil, nil).HasHole(0, 0)
 
 	if result.Pass() {
 		t.Error("expected failure for nil model")
@@ -34,7 +34,7 @@ func TestExpect_NilModel(t *testing.T) {
 
 func TestExpect_EmptyModel(t *testing.T) {
 	model := machining.NewMachiningModel()
-	result := Expect(model).HasHole(0, 0)
+	result := Expect(nil, model).HasHole(0, 0)
 
 	if result.Pass() {
 		t.Error("expected failure for empty model")
@@ -48,16 +48,16 @@ T1
 G0 X50 Y50 Z5
 G1 Z-10 F100`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
 	// With tight tolerance - exact match required
-	result := ExpectWithTolerance(model, 1e-9).HasHole(50.0000001, 50)
+	result := ExpectWithTolerance(trace, model, 1e-9).HasHole(50.0000001, 50)
 	if result.Pass() {
 		t.Error("expected failure with tight tolerance")
 	}
 
 	// With loose tolerance - should match
-	result = ExpectWithTolerance(model, 0.001).HasHole(50.0001, 50)
+	result = ExpectWithTolerance(trace, model, 0.001).HasHole(50.0001, 50)
 	if result.Failed() {
 		t.Errorf("expected pass with loose tolerance: %s", result.Error())
 	}
@@ -72,8 +72,8 @@ T1
 G0 X50 Y50 Z5
 G1 Z-10 F100`
 
-	model := modelFromGCode(t, gcode)
-	result := Expect(model).HasHole(50, 50)
+	trace, model := traceAndModelFromGCode(t, gcode)
+	result := Expect(trace, model).HasHole(50, 50)
 
 	if result.Failed() {
 		t.Errorf("expected hole at (50, 50): %s", result.Error())
@@ -87,8 +87,8 @@ T1
 G0 X50 Y50 Z5
 G1 Z-10 F100`
 
-	model := modelFromGCode(t, gcode)
-	result := Expect(model).HasHole(100, 100)
+	trace, model := traceAndModelFromGCode(t, gcode)
+	result := Expect(trace, model).HasHole(100, 100)
 
 	if result.Pass() {
 		t.Error("expected failure for non-existent hole")
@@ -112,14 +112,14 @@ G0 Z5
 G0 X30 Y30
 G1 Z-5 F100`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
-	result := Expect(model).HasHoleCount(3)
+	result := Expect(trace, model).HasHoleCount(3)
 	if result.Failed() {
 		t.Errorf("expected 3 holes: %s", result.Error())
 	}
 
-	result = Expect(model).HasHoleCount(5)
+	result = Expect(trace, model).HasHoleCount(5)
 	if result.Pass() {
 		t.Error("expected failure for wrong hole count")
 	}
@@ -132,15 +132,15 @@ T1
 G0 X50 Y50 Z5
 G1 Z-10 F100`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
 	// Default tool diameter in analyzer is 6.0
-	result := Expect(model).HasHole(50, 50).WithDiameter(6.0)
+	result := Expect(trace, model).HasHole(50, 50).WithDiameter(6.0)
 	if result.Failed() {
 		t.Errorf("expected hole with diameter 6.0: %s", result.Error())
 	}
 
-	result = Expect(model).HasHole(50, 50).WithDiameter(10.0)
+	result = Expect(trace, model).HasHole(50, 50).WithDiameter(10.0)
 	if result.Pass() {
 		t.Error("expected failure for wrong diameter")
 	}
@@ -153,15 +153,15 @@ T1
 G0 X50 Y50 Z5
 G1 Z-10 F100`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
 	// Depth should be 15 (from Z5 to Z-10)
-	result := Expect(model).HasHole(50, 50).WithDepth(15.0)
+	result := Expect(trace, model).HasHole(50, 50).WithDepth(15.0)
 	if result.Failed() {
 		t.Errorf("expected hole with depth 15.0: %s", result.Error())
 	}
 
-	result = Expect(model).HasHole(50, 50).WithDepth(10.0)
+	result = Expect(trace, model).HasHole(50, 50).WithDepth(10.0)
 	if result.Pass() {
 		t.Error("expected failure for wrong depth")
 	}
@@ -174,14 +174,14 @@ T1
 G0 X50 Y50 Z5
 G1 Z-10 F100`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
-	result := Expect(model).HasHole(50, 50).WithTool(1)
+	result := Expect(trace, model).HasHole(50, 50).WithTool(1)
 	if result.Failed() {
 		t.Errorf("expected hole with tool 1: %s", result.Error())
 	}
 
-	result = Expect(model).HasHole(50, 50).WithTool(2)
+	result = Expect(trace, model).HasHole(50, 50).WithTool(2)
 	if result.Pass() {
 		t.Error("expected failure for wrong tool")
 	}
@@ -194,10 +194,10 @@ T1
 G0 X50 Y50 Z5
 G1 Z-10 F100`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
 	// Chain all assertions
-	result := Expect(model).
+	result := Expect(trace, model).
 		HasHole(50, 50).
 		WithDiameter(6.0).
 		WithDepth(15.0).
@@ -218,9 +218,9 @@ G0 X0 Y50 Z5
 G1 Z-5 F100
 G1 X100 F200`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
-	result := Expect(model).HasSlot(0, 50, 100, 50)
+	result := Expect(trace, model).HasSlot(0, 50, 100, 50)
 	if result.Failed() {
 		t.Errorf("expected slot from (0,50) to (100,50): %s", result.Error())
 	}
@@ -234,9 +234,9 @@ G0 X0 Y50 Z5
 G1 Z-5 F100
 G1 X100 F200`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
-	result := Expect(model).HasSlot(0, 0, 100, 0)
+	result := Expect(trace, model).HasSlot(0, 0, 100, 0)
 	if result.Pass() {
 		t.Error("expected failure for non-existent slot")
 	}
@@ -254,14 +254,14 @@ G0 X0 Y50 Z5
 G1 Z-5 F100
 G1 X100 F200`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
-	result := Expect(model).HasSlotCount(1)
+	result := Expect(trace, model).HasSlotCount(1)
 	if result.Failed() {
 		t.Errorf("expected 1 slot: %s", result.Error())
 	}
 
-	result = Expect(model).HasSlotCount(3)
+	result = Expect(trace, model).HasSlotCount(3)
 	if result.Pass() {
 		t.Error("expected failure for wrong slot count")
 	}
@@ -280,9 +280,9 @@ G1 Y100
 G1 X0
 G1 Y0`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
-	result := Expect(model).HasContour()
+	result := Expect(trace, model).HasContour()
 	if result.Failed() {
 		t.Errorf("expected contour: %s", result.Error())
 	}
@@ -295,9 +295,9 @@ T1
 G0 X50 Y50 Z5
 G1 Z-10 F100`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
-	result := Expect(model).HasContour()
+	result := Expect(trace, model).HasContour()
 	if result.Pass() {
 		t.Error("expected failure for no contours (only hole)")
 	}
@@ -314,14 +314,14 @@ G1 Y100
 G1 X0
 G1 Y0`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
-	result := Expect(model).HasContourCount(1)
+	result := Expect(trace, model).HasContourCount(1)
 	if result.Failed() {
 		t.Errorf("expected 1 contour: %s", result.Error())
 	}
 
-	result = Expect(model).HasContourCount(5)
+	result = Expect(trace, model).HasContourCount(5)
 	if result.Pass() {
 		t.Error("expected failure for wrong contour count")
 	}
@@ -338,9 +338,9 @@ G1 Y100
 G1 X0
 G1 Y0`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
-	result := Expect(model).HasContour().IsClosed()
+	result := Expect(trace, model).HasContour().IsClosed()
 	if result.Failed() {
 		t.Errorf("expected closed contour: %s", result.Error())
 	}
@@ -355,9 +355,9 @@ G0 X0 Y0 Z-5
 G1 X100 F200
 G1 Y100`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
-	result := Expect(model).HasContour().IsOpen()
+	result := Expect(trace, model).HasContour().IsOpen()
 	if result.Failed() {
 		t.Errorf("expected open contour: %s", result.Error())
 	}
@@ -374,15 +374,15 @@ G1 Y100
 G1 X0
 G1 Y0`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
 	// Square has 4 segments
-	result := Expect(model).HasContour().HasSegmentCount(4)
+	result := Expect(trace, model).HasContour().HasSegmentCount(4)
 	if result.Failed() {
 		t.Errorf("expected 4 segments: %s", result.Error())
 	}
 
-	result = Expect(model).HasContour().HasSegmentCount(3)
+	result = Expect(trace, model).HasContour().HasSegmentCount(3)
 	if result.Pass() {
 		t.Error("expected failure for wrong segment count")
 	}
@@ -399,9 +399,9 @@ G1 Y100
 G1 X0
 G1 Y0`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
-	result := Expect(model).
+	result := Expect(trace, model).
 		HasContour().
 		IsClosed().
 		HasSegmentCount(4)
@@ -420,7 +420,7 @@ T1
 G0 X50 Y50 Z5
 G1 Z-10 F100`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
 	bounds := Bounds{
 		MinX: 0, MaxX: 100,
@@ -428,7 +428,7 @@ G1 Z-10 F100`
 		MinZ: -20, MaxZ: 10,
 	}
 
-	result := Expect(model).NoOperationOutside(bounds)
+	result := Expect(trace, model).NoOperationOutside(bounds)
 	if result.Failed() {
 		t.Errorf("expected all operations within bounds: %s", result.Error())
 	}
@@ -441,7 +441,7 @@ T1
 G0 X150 Y50 Z5
 G1 Z-10 F100`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
 	bounds := Bounds{
 		MinX: 0, MaxX: 100,
@@ -449,7 +449,7 @@ G1 Z-10 F100`
 		MinZ: -20, MaxZ: 10,
 	}
 
-	result := Expect(model).NoOperationOutside(bounds)
+	result := Expect(trace, model).NoOperationOutside(bounds)
 	if result.Pass() {
 		t.Error("expected failure for hole outside X bounds")
 	}
@@ -465,7 +465,7 @@ T1
 G0 X50 Y50 Z5
 G1 Z-30 F100`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
 	bounds := Bounds{
 		MinX: 0, MaxX: 100,
@@ -473,7 +473,7 @@ G1 Z-30 F100`
 		MinZ: -20, MaxZ: 10,
 	}
 
-	result := Expect(model).NoOperationOutside(bounds)
+	result := Expect(trace, model).NoOperationOutside(bounds)
 	if result.Pass() {
 		t.Error("expected failure for hole outside Z bounds")
 	}
@@ -498,9 +498,9 @@ G1 Y100
 G1 X0
 G1 Y0`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
-	result := Expect(model).
+	result := Expect(trace, model).
 		HasHole(50, 50).WithDepth(15.0).
 		And().
 		HasContour().IsClosed()
@@ -519,9 +519,9 @@ T1
 G0 X50 Y50 Z5
 G1 Z-10 F100`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
-	result := Expect(model).HasHole(50, 50)
+	result := Expect(trace, model).HasHole(50, 50)
 	holes := result.FilteredHoles()
 
 	if len(holes) != 1 {
@@ -541,16 +541,16 @@ T1
 G0 X50 Y50 Z5
 G1 Z-10 F100`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
 	// Test that error messages include context
-	result := Expect(model).HasHole(100, 100)
+	result := Expect(trace, model).HasHole(100, 100)
 	if !strings.Contains(result.Error(), "HasHole") {
 		t.Error("error should include assertion name")
 	}
 
 	// Test that chained errors have full context
-	result = Expect(model).HasHole(50, 50).WithDiameter(999)
+	result = Expect(trace, model).HasHole(50, 50).WithDiameter(999)
 	if !strings.Contains(result.Error(), "HasHole") || !strings.Contains(result.Error(), "WithDiameter") {
 		t.Error("chained error should include full context")
 	}
@@ -565,6 +565,7 @@ type mockT struct {
 }
 
 func (m *mockT) Helper()                           {}
+func (m *mockT) Name() string                      { return "mockTest" }
 func (m *mockT) Errorf(format string, args ...any) { m.errors = append(m.errors, "error") }
 func (m *mockT) Fatalf(format string, args ...any) {
 	m.errors = append(m.errors, "fatal")
@@ -578,10 +579,10 @@ T1
 G0 X50 Y50 Z5
 G1 Z-10 F100`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 	mock := &mockT{}
 
-	_ = Expect(model).HasHole(50, 50).Assert(mock)
+	_ = Expect(trace, model).HasHole(50, 50).Assert(mock)
 
 	if len(mock.errors) > 0 {
 		t.Error("expected no errors for passing assertion")
@@ -595,10 +596,10 @@ T1
 G0 X50 Y50 Z5
 G1 Z-10 F100`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 	mock := &mockT{}
 
-	_ = Expect(model).HasHole(100, 100).Assert(mock)
+	_ = Expect(trace, model).HasHole(100, 100).Assert(mock)
 
 	if len(mock.errors) == 0 {
 		t.Error("expected error for failing assertion")
@@ -615,10 +616,10 @@ T1
 G0 X50 Y50 Z5
 G1 Z-10 F100`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 	mock := &mockT{}
 
-	_ = Expect(model).HasHole(100, 100).AssertFatal(mock)
+	_ = Expect(trace, model).HasHole(100, 100).AssertFatal(mock)
 
 	if !mock.fatal {
 		t.Error("AssertFatal should call Fatalf")
@@ -632,10 +633,10 @@ T1
 G0 X50 Y50 Z5
 G1 Z-10 F100`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 	mock := &mockT{}
 
-	_ = Expect(model).HasHole(100, 100).Must(mock)
+	_ = Expect(trace, model).HasHole(100, 100).Must(mock)
 
 	if !mock.fatal {
 		t.Error("Must should call Fatalf")
@@ -651,12 +652,12 @@ T1
 G0 X50 Y50 Z5
 G1 Z-10 F100`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
 	// Run the same assertion multiple times
 	for i := 0; i < 10; i++ {
-		result1 := Expect(model).HasHole(50, 50).WithDepth(15.0)
-		result2 := Expect(model).HasHole(50, 50).WithDepth(15.0)
+		result1 := Expect(trace, model).HasHole(50, 50).WithDepth(15.0)
+		result2 := Expect(trace, model).HasHole(50, 50).WithDepth(15.0)
 
 		if result1.Pass() != result2.Pass() {
 			t.Error("assertions should be deterministic")
@@ -700,7 +701,7 @@ G0 Z5
 M5
 M30`
 
-	model := modelFromGCode(t, gcode)
+	trace, model := traceAndModelFromGCode(t, gcode)
 
 	// Verify all features exist
 	// Note: The analyzer detects plunge cuts (vertical moves from positive to negative Z)
@@ -709,24 +710,24 @@ M30`
 	// - 1 plunge at the start of the slot operation
 	// - 1 plunge at the start of the contour operation
 	// This behavior is documented in the machining package.
-	_ = Expect(model).
+	_ = Expect(trace, model).
 		HasHoleCount(5).
 		Assert(t)
 
-	_ = Expect(model).
+	_ = Expect(trace, model).
 		HasSlotCount(1).
 		Assert(t)
 
-	_ = Expect(model).
+	_ = Expect(trace, model).
 		HasContour().
 		IsClosed().
 		HasSegmentCount(3). // Triangle has 3 sides
 		Assert(t)
 
 	// Verify specific hole positions
-	_ = Expect(model).HasHole(10, 10).Assert(t)
-	_ = Expect(model).HasHole(30, 10).Assert(t)
-	_ = Expect(model).HasHole(50, 10).Assert(t)
+	_ = Expect(trace, model).HasHole(10, 10).Assert(t)
+	_ = Expect(trace, model).HasHole(30, 10).Assert(t)
+	_ = Expect(trace, model).HasHole(50, 10).Assert(t)
 
 	// Verify bounds
 	bounds := Bounds{
@@ -734,7 +735,7 @@ M30`
 		MinY: 0, MaxY: 200,
 		MinZ: -20, MaxZ: 10,
 	}
-	_ = Expect(model).NoOperationOutside(bounds).Assert(t)
+	_ = Expect(trace, model).NoOperationOutside(bounds).Assert(t)
 }
 
 // --- Benchmarks ---
@@ -751,7 +752,7 @@ G1 Z-10 F100`
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = Expect(model).HasHole(50, 50)
+		_ = Expect(trace, model).HasHole(50, 50)
 	}
 }
 
@@ -767,7 +768,7 @@ G1 Z-10 F100`
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = Expect(model).
+		_ = Expect(trace, model).
 			HasHole(50, 50).
 			WithDiameter(6.0).
 			WithDepth(15.0).

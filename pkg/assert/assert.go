@@ -5,6 +5,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/eduardotorresdev/gocode-check/pkg/interpreter"
 	"github.com/eduardotorresdev/gocode-check/pkg/machining"
 )
 
@@ -14,6 +15,7 @@ const DefaultTolerance = 1e-6
 // Assertion represents the result of an assertion operation.
 // It holds the pass/fail state, any error message, and allows for chaining.
 type Assertion struct {
+	trace     *interpreter.ExecutionTrace
 	model     *machining.MachiningModel
 	tolerance float64
 	passed    bool
@@ -28,15 +30,16 @@ type Assertion struct {
 	context string
 }
 
-// Expect creates a new Assertion for the given MachiningModel.
+// Expect creates a new Assertion for the given ExecutionTrace and MachiningModel.
 // Uses the default tolerance for floating-point comparisons.
-func Expect(model *machining.MachiningModel) *Assertion {
-	return ExpectWithTolerance(model, DefaultTolerance)
+func Expect(trace *interpreter.ExecutionTrace, model *machining.MachiningModel) *Assertion {
+	return ExpectWithTolerance(trace, model, DefaultTolerance)
 }
 
 // ExpectWithTolerance creates a new Assertion with a custom tolerance.
-func ExpectWithTolerance(model *machining.MachiningModel, tolerance float64) *Assertion {
+func ExpectWithTolerance(trace *interpreter.ExecutionTrace, model *machining.MachiningModel, tolerance float64) *Assertion {
 	return &Assertion{
+		trace:            trace,
 		model:            model,
 		tolerance:        tolerance,
 		passed:           true,
