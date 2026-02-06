@@ -23,12 +23,19 @@ type Message struct {
 	Data interface{} `json:"data"`
 }
 
+// client represents a connected WebSocket client with its own write channel.
+type client struct {
+	conn    *websocket.Conn
+	send    chan []byte
+	writeMu sync.Mutex // Protects writes to conn
+}
+
 // Server handles HTTP and WebSocket connections for the UI.
 type Server struct {
 	port       int
 	logger     *Logger
 	upgrader   websocket.Upgrader
-	clients    map[*websocket.Conn]bool
+	clients    map[*client]bool
 	clientsMu  sync.RWMutex
 	broadcast  chan Message
 	httpServer *http.Server
@@ -44,7 +51,7 @@ func NewServer(port int, logger *Logger) *Server {
 	return &Server{
 		port:      port,
 		logger:    logger,
-		clients:   make(map[*websocket.Conn]bool),
+		clients:   make(map[*client]bool),
 		broadcast: make(chan Message, 256),
 		connected: make(chan struct{}),
 		upgrader: websocket.Upgrader{
@@ -166,8 +173,11 @@ func (s *Server) broadcastToClients(msg Message) {
 		return
 	}
 
-	for client := range s.clients {
-		err := client.WriteMessage(websocket.TextMessage, data)
+	for c := range s.clients {
+		// Use mutex to ensure thread-safe writes
+		c.writeMu.Lock()
+		err := c.conn.WriteMessage(websocket.TextMessage, data)
+		c.writeMu.Unlock()
 		if err != nil {
 			s.logger.Debug("Failed to send to client: %v", err)
 		}
@@ -181,9 +191,15 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Create client wrapper
+	c := &client{
+		conn: conn,
+		send: make(chan []byte, 256),
+	}
+
 	// Register client
 	s.clientsMu.Lock()
-	s.clients[conn] = true
+	s.clients[c] = true
 	clientCount := len(s.clients)
 	s.clientsMu.Unlock()
 
@@ -194,7 +210,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	s.logger.ConnectionStatus(true, clientCount)
 
-	// Send welcome message
+	// Send welcome message (using mutex for thread-safe write)
 	welcomeMsg := Message{
 		Type: "connected",
 		Data: map[string]interface{}{
@@ -202,25 +218,27 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			"timestamp": time.Now().UnixMilli(),
 		},
 	}
+	c.writeMu.Lock()
 	_ = conn.WriteJSON(welcomeMsg)
+	c.writeMu.Unlock()
 
 	// Handle client messages
-	go s.readFromClient(conn)
+	go s.readFromClient(c)
 }
 
-func (s *Server) readFromClient(conn *websocket.Conn) {
+func (s *Server) readFromClient(c *client) {
 	defer func() {
 		s.clientsMu.Lock()
-		delete(s.clients, conn)
+		delete(s.clients, c)
 		clientCount := len(s.clients)
 		s.clientsMu.Unlock()
 
 		s.logger.ConnectionStatus(false, clientCount)
-		conn.Close()
+		c.conn.Close()
 	}()
 
 	for {
-		_, message, err := conn.ReadMessage()
+		_, message, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				s.logger.Debug("WebSocket read error: %v", err)
