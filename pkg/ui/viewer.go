@@ -29,6 +29,10 @@ type Viewer struct {
 // This should be called in TestMain.
 // The cleanup function should be deferred to ensure proper shutdown.
 //
+// Note: After cleanup is called, the server continues running to allow
+// viewing results even after tests complete. Use Shutdown() to fully
+// stop the server if needed.
+//
 // Example:
 //
 //	func TestMain(m *testing.M) {
@@ -106,26 +110,24 @@ func Enable(cfg Config) func() {
 				return
 			}
 
+			// Unregister observers
+			interpreter.UnregisterObserver(globalViewer.observer)
+			assert.UnregisterObserver(globalViewer.observer)
+
+			// In production use, the server keeps running after tests complete
+			// so users can view results even after closing/reopening the browser
 			logger.Info("UI server will continue running...")
 			logger.Info("You can close the browser and reopen it at %s to view the results.", globalViewer.server.URL())
 			logger.Info("Press Ctrl+C to stop the server when you're done.")
 
-			// Unregister observers but keep server running
-			interpreter.UnregisterObserver(globalViewer.observer)
-			assert.UnregisterObserver(globalViewer.observer)
-
-			// DO NOT cancel context or stop server - let it keep running
-			// Users can manually close the browser and reopen to see results
-
-			// Note: We intentionally don't call cancel() here to keep the server alive
-			// The server will continue running until the process exits
+			// Note: We don't cancel context or clear globalViewer here to keep server alive
+			// The server continues running until the process exits (e.g., Ctrl+C)
+			// For tests that need full cleanup, they can call Shutdown() directly
 
 			// Clear browser lock file
 			ClearBrowserLock()
 
 			logger.Success("Test execution complete. Server still running.")
-
-			// Don't clear globalViewer or reset once - keep server alive
 		}
 	})
 
@@ -135,6 +137,34 @@ func Enable(cfg Config) func() {
 	}
 
 	return cleanup
+}
+
+// Shutdown fully stops the UI server and cleans up all resources.
+// This is mainly useful for testing. In production, the server is meant
+// to keep running after tests complete.
+func Shutdown() {
+	mu.Lock()
+	defer mu.Unlock()
+
+	if globalViewer == nil {
+		return
+	}
+
+	// Unregister observers if still registered
+	interpreter.UnregisterObserver(globalViewer.observer)
+	assert.UnregisterObserver(globalViewer.observer)
+
+	// Cancel context (stops server)
+	globalViewer.cancel()
+
+	// Clear browser lock file
+	ClearBrowserLock()
+
+	globalViewer.logger.Info("UI server stopped.")
+
+	globalViewer = nil
+	// Reset once for potential re-enable
+	once = sync.Once{}
 }
 
 // Enabled returns true if the UI viewer is active.
