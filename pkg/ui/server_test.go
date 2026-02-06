@@ -12,7 +12,8 @@ import (
 
 func TestServerStartStop(t *testing.T) {
 	logger := NewLogger(false)
-	server := NewServer(0, logger) // Port 0 = random available port
+	flow := NewFlowController()
+	server := NewServer(0, logger, flow) // Port 0 = random available port
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -49,7 +50,8 @@ func TestServerStartStop(t *testing.T) {
 
 func TestServerWebSocket(t *testing.T) {
 	logger := NewLogger(false)
-	server := NewServer(0, logger)
+	flow := NewFlowController()
+	server := NewServer(0, logger, flow)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -91,7 +93,8 @@ func TestServerWebSocket(t *testing.T) {
 
 func TestServerBroadcast(t *testing.T) {
 	logger := NewLogger(false)
-	server := NewServer(0, logger)
+	flow := NewFlowController()
+	server := NewServer(0, logger, flow)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -138,7 +141,8 @@ func TestServerBroadcast(t *testing.T) {
 
 func TestServerWaitForConnection(t *testing.T) {
 	logger := NewLogger(false)
-	server := NewServer(0, logger)
+	flow := NewFlowController()
+	server := NewServer(0, logger, flow)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -1,18 +1,20 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { connection, connect } from './lib/state/connection.svelte.js';
+  import { connection, connect, send } from './lib/state/connection.svelte.js';
   import { machine } from './lib/state/machine.svelte.js';
   import { events } from './lib/state/events.svelte.js';
   import { expectations } from './lib/state/expectations.svelte.js';
+  import { sessions } from './lib/state/sessions.svelte.js';
+  import { flow } from './lib/state/flow.svelte.js';
   
   import Header from './lib/components/Header.svelte';
+  import TabBar from './lib/components/TabBar.svelte';
   import CNCViewer from './lib/components/CNCViewer.svelte';
   import ControlBar from './lib/components/ControlBar.svelte';
   import ExpectationPanel from './lib/components/ExpectationPanel.svelte';
   import EventTimeline from './lib/components/EventTimeline.svelte';
   import ErrorDisplay from './lib/components/ErrorDisplay.svelte';
   
-  let speed = $state('normal');
   let error = $state(null);
   let cleanup = null;
   
@@ -39,10 +41,14 @@
       case 'step':
         events.add(msg.data);
         machine.update(msg.data.stateAfter);
+        // Also update active session
+        sessions.addEvent(msg.data);
+        sessions.updateMachine(msg.data.stateAfter);
         break;
         
       case 'interpret_end':
         machine.update(msg.data.finalState);
+        sessions.updateMachine(msg.data.finalState);
         break;
         
       case 'interpret_error':
@@ -52,14 +58,22 @@
       case 'session_start':
         expectations.clear();
         expectations.setTest(msg.data.testName);
+        // Create new session tab
+        sessions.create(msg.data.testName);
         break;
         
       case 'expectation':
         expectations.add(msg.data);
+        sessions.addExpectation(msg.data);
         break;
         
       case 'session_end':
         expectations.endTest(msg.data.allPassed);
+        sessions.endSession(msg.data.allPassed);
+        break;
+        
+      case 'flow_state':
+        flow.setState(msg.data.state);
         break;
     }
   }
@@ -67,14 +81,25 @@
   function dismissError() {
     error = null;
   }
+
+  function handleEventClick(index) {
+    // Jump to specific event
+    send({ type: 'jump_to', data: { index } });
+    events.setCurrentIndex(index);
+    sessions.setCurrentIndex(index);
+  }
 </script>
 
 <div class="app">
   <Header />
   
+  {#if sessions.count > 0}
+    <TabBar />
+  {/if}
+  
   <div class="main-content">
     <aside class="sidebar-left">
-      <EventTimeline />
+      <EventTimeline onEventClick={handleEventClick} />
     </aside>
     
     <main class="viewer-area">
@@ -86,7 +111,7 @@
     </aside>
   </div>
   
-  <ControlBar {speed} />
+  <ControlBar />
   
   <ErrorDisplay {error} onDismiss={dismissError} />
 </div>
