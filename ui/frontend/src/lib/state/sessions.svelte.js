@@ -3,6 +3,8 @@
 let sessionList = $state([]);
 let activeSessionId = $state(null);
 let sessionIdCounter = $state(0);
+// Track which session is currently receiving events (the latest running session)
+let receivingSessionId = $state(null);
 
 // Create session structure
 function createSession(testName) {
@@ -27,77 +29,175 @@ function createSession(testName) {
   };
 }
 
+// Compute the tool path for a given session
+function computeToolPath(events) {
+  return events.map(e => ({
+    x: e.stateAfter?.Position?.X ?? 0,
+    y: e.stateAfter?.Position?.Y ?? 0,
+    z: e.stateAfter?.Position?.Z ?? 0,
+    type: e.event?.Type ?? 'unknown',
+    index: e.index,
+    isCut: ['LinearCut', 'ArcCW', 'ArcCCW', 'DrillCycle'].includes(e.event?.Type),
+  }));
+}
+
+// Compute statistics for a given session
+function computeStats(events) {
+  return {
+    total: events.length,
+    rapidMoves: events.filter(e => e.event?.Type === 'RapidMove').length,
+    linearCuts: events.filter(e => e.event?.Type === 'LinearCut').length,
+    arcs: events.filter(e => e.event?.Type === 'ArcCW' || e.event?.Type === 'ArcCCW').length,
+  };
+}
+
 export const sessions = {
   get list() { return sessionList; },
   get activeId() { return activeSessionId; },
+  get receivingId() { return receivingSessionId; },
   get active() {
     return sessionList.find(s => s.id === activeSessionId) || null;
   },
+  get receiving() {
+    return sessionList.find(s => s.id === receivingSessionId) || null;
+  },
   get count() { return sessionList.length; },
 
-  // Create new session
+  // Get tool path for active session
+  get toolPath() {
+    const session = this.active;
+    if (!session) return [];
+    return computeToolPath(session.events);
+  },
+
+  // Get stats for active session
+  get stats() {
+    const session = this.active;
+    if (!session) return { total: 0, rapidMoves: 0, linearCuts: 0, arcs: 0 };
+    return computeStats(session.events);
+  },
+
+  // Get machine state for active session at current index
+  get machine() {
+    const session = this.active;
+    if (!session) return {
+      position: { X: 0, Y: 0, Z: 0 },
+      unit: 'mm',
+      mode: 'absolute',
+      tool: null,
+      feed: 0,
+      spindle: 0,
+      spindleOn: false,
+      spindleCW: true,
+    };
+    return session.machine;
+  },
+
+  // Get events for active session
+  get events() {
+    const session = this.active;
+    if (!session) return [];
+    return session.events;
+  },
+
+  // Get expectations for active session
+  get expectations() {
+    const session = this.active;
+    if (!session) return [];
+    return session.expectations;
+  },
+
+  // Get current index for active session
+  get currentIndex() {
+    const session = this.active;
+    if (!session) return -1;
+    return session.currentIndex;
+  },
+
+  // Create new session - this becomes the receiving session
   create(testName) {
     const session = createSession(testName);
     sessionList.push(session);
+    // New session becomes the receiving session
+    receivingSessionId = session.id;
+    // Also make it active (switch to new tab)
     activeSessionId = session.id;
     return session.id;
   },
 
-  // Select active session
+  // Select active session (for viewing)
   setActive(sessionId) {
     if (sessionList.some(s => s.id === sessionId)) {
       activeSessionId = sessionId;
     }
   },
 
-  // Add event to active session
+  // Add event to the RECEIVING session (not active)
   addEvent(event) {
-    const session = this.active;
+    const session = this.receiving;
     if (session) {
-      session.events.push(event);
+      session.events = [...session.events, event];
       session.currentIndex = event.index;
     }
   },
 
-  // Add expectation to active session
+  // Add expectation to the RECEIVING session (not active)
   addExpectation(expectation) {
-    const session = this.active;
+    const session = this.receiving;
     if (session) {
-      session.expectations.push(expectation);
+      session.expectations = [...session.expectations, expectation];
     }
   },
 
-  // Update machine state in active session
+  // Update machine state in the RECEIVING session (not active)
   updateMachine(newState) {
-    const session = this.active;
+    const session = this.receiving;
     if (session && newState) {
+      const newMachine = { ...session.machine };
       if (newState.Position) {
-        session.machine.position = { ...newState.Position };
+        newMachine.position = { ...newState.Position };
       }
-      if (newState.Unit) session.machine.unit = newState.Unit;
-      if (newState.Mode) session.machine.mode = newState.Mode;
-      if (newState.Tool !== undefined) session.machine.tool = newState.Tool;
-      if (newState.Feed !== undefined) session.machine.feed = newState.Feed;
-      if (newState.Spindle !== undefined) session.machine.spindle = newState.Spindle;
-      if (newState.SpindleOn !== undefined) session.machine.spindleOn = newState.SpindleOn;
-      if (newState.SpindleCW !== undefined) session.machine.spindleCW = newState.SpindleCW;
+      if (newState.Unit) newMachine.unit = newState.Unit;
+      if (newState.Mode) newMachine.mode = newState.Mode;
+      if (newState.Tool !== undefined) newMachine.tool = newState.Tool;
+      if (newState.Feed !== undefined) newMachine.feed = newState.Feed;
+      if (newState.Spindle !== undefined) newMachine.spindle = newState.Spindle;
+      if (newState.SpindleOn !== undefined) newMachine.spindleOn = newState.SpindleOn;
+      if (newState.SpindleCW !== undefined) newMachine.spindleCW = newState.SpindleCW;
+      session.machine = newMachine;
     }
   },
 
-  // Mark current session as finished
+  // Mark receiving session as finished
   endSession(allPassed) {
-    const session = this.active;
+    const session = this.receiving;
     if (session) {
       session.running = false;
       session.allPassed = allPassed;
     }
   },
 
-  // Set current index in active session
+  // Set current index in active session (for navigation/playback)
   setCurrentIndex(index) {
     const session = this.active;
     if (session) {
       session.currentIndex = index;
+      // Update machine state based on the event at that index
+      const event = session.events.find(e => e.index === index);
+      if (event?.stateAfter) {
+        const newMachine = { ...session.machine };
+        if (event.stateAfter.Position) {
+          newMachine.position = { ...event.stateAfter.Position };
+        }
+        if (event.stateAfter.Unit) newMachine.unit = event.stateAfter.Unit;
+        if (event.stateAfter.Mode) newMachine.mode = event.stateAfter.Mode;
+        if (event.stateAfter.Tool !== undefined) newMachine.tool = event.stateAfter.Tool;
+        if (event.stateAfter.Feed !== undefined) newMachine.feed = event.stateAfter.Feed;
+        if (event.stateAfter.Spindle !== undefined) newMachine.spindle = event.stateAfter.Spindle;
+        if (event.stateAfter.SpindleOn !== undefined) newMachine.spindleOn = event.stateAfter.SpindleOn;
+        if (event.stateAfter.SpindleCW !== undefined) newMachine.spindleCW = event.stateAfter.SpindleCW;
+        session.machine = newMachine;
+      }
     }
   },
 
@@ -105,6 +205,7 @@ export const sessions = {
   clear() {
     sessionList.length = 0;
     activeSessionId = null;
+    receivingSessionId = null;
     sessionIdCounter = 0;
   },
 
@@ -115,6 +216,11 @@ export const sessions = {
       sessionList.splice(index, 1);
       if (activeSessionId === sessionId) {
         activeSessionId = sessionList.length > 0 ? sessionList[0].id : null;
+      }
+      if (receivingSessionId === sessionId) {
+        // Find the next running session or null
+        const nextRunning = sessionList.find(s => s.running);
+        receivingSessionId = nextRunning?.id || null;
       }
     }
   },

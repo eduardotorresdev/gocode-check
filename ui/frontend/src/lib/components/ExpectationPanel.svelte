@@ -1,18 +1,27 @@
 <script>
-  import { expectations } from '../state/expectations.svelte.js';
+  import { sessions } from '../state/sessions.svelte.js';
+  
+  // Computed stats from session expectations
+  function getStats() {
+    const list = sessions.expectations;
+    return {
+      passed: list.filter(e => e.passed).length,
+      failed: list.filter(e => !e.passed).length,
+    };
+  }
 </script>
 
 <div class="expectation-panel">
   <div class="panel-header">
     <h3>Expectations</h3>
     <div class="stats">
-      <span class="passed">{expectations.stats.passed} ✓</span>
-      <span class="failed">{expectations.stats.failed} ✗</span>
+      <span class="passed">{getStats().passed} ✓</span>
+      <span class="failed">{getStats().failed} ✗</span>
     </div>
   </div>
   
   <div class="expectation-list">
-    {#each expectations.list as exp, i}
+    {#each sessions.expectations as exp, i}
       <div class="expectation-item" class:passed={exp.passed} class:failed={!exp.passed}>
         <span class="icon">{exp.passed ? '✓' : '✗'}</span>
         <div class="content">
@@ -26,7 +35,11 @@
       </div>
     {:else}
       <div class="empty">
-        No expectations yet
+        {#if sessions.count === 0}
+          Waiting for test session...
+        {:else}
+          No expectations yet
+        {/if}
       </div>
     {/each}
   </div>

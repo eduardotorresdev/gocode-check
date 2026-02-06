@@ -2,8 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import * as THREE from 'three';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-  import { events } from '../state/events.svelte.js';
-  import { machine } from '../state/machine.svelte.js';
+  import { sessions } from '../state/sessions.svelte.js';
   
   let container;
   let scene, camera, renderer, controls;
@@ -16,6 +15,8 @@
   let drillHoles = [];
   let animationId = null;
   let toolRotation = 0;
+  let lastToolPathLength = 0;
+  let cutMaterial = null;
   
   // Scale configuration: 3m view width
   const VIEW_WIDTH = 3000; // 3000mm = 3m
@@ -42,10 +43,12 @@
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0a0a0f);
     
-    // Camera - orthographic-like view with perspective
+    // Camera - positioned to look at XY plane from above (Z is up)
     const aspect = container.clientWidth / container.clientHeight;
     camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 10000);
-    camera.position.set(1500, 1500, 1500);
+    // Position camera looking down at the workpiece from an angle
+    camera.position.set(1500, -1500, 1500);
+    camera.up.set(0, 0, 1); // Z is up
     camera.lookAt(0, 0, 0);
     
     // Renderer
@@ -56,14 +59,16 @@
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
     
-    // OrbitControls for interaction
+    // OrbitControls for interaction - allow full 360 rotation
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.screenSpacePanning = false;
     controls.minDistance = 200;
     controls.maxDistance = 5000;
-    controls.maxPolarAngle = Math.PI / 2;
+    // Remove polar angle restriction - allow full 360 degree rotation
+    controls.minPolarAngle = 0;
+    controls.maxPolarAngle = Math.PI;
     controls.target.set(0, 0, 0);
     
     // Lighting
@@ -71,31 +76,43 @@
     scene.add(ambientLight);
     
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight.position.set(500, 1000, 500);
+    directionalLight.position.set(500, -500, 1000);
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.width = 2048;
     directionalLight.shadow.mapSize.height = 2048;
     scene.add(directionalLight);
     
-    // Grid
+    // Add secondary light for better visibility
+    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
+    directionalLight2.position.set(-500, 500, 500);
+    scene.add(directionalLight2);
+    
+    // Grid on XY plane (Z=0 is the workpiece surface)
     gridHelper = new THREE.GridHelper(VIEW_WIDTH, 30, 0x3a3a4a, 0x2a2a3a);
-    gridHelper.rotation.x = Math.PI / 2;
-    gridHelper.position.z = -WORKPIECE_THICKNESS;
+    gridHelper.rotation.x = Math.PI / 2; // Rotate to XY plane
+    gridHelper.position.z = 0.5; // Slightly above workpiece surface
     scene.add(gridHelper);
     
-    // Axes helper
+    // Axes helper - Z is up
     const axesHelper = new THREE.AxesHelper(300);
     scene.add(axesHelper);
     
-    // Workpiece (floor)
+    // Workpiece (on XY plane, Z down)
     createWorkpiece();
     
-    // Milling cutter tool
+    // Milling cutter tool (above workpiece, Z positive)
     createMillingTool();
     
     // Cut marks container
     cutMarks = new THREE.Group();
     scene.add(cutMarks);
+    
+    // Pre-create cut material
+    cutMaterial = new THREE.MeshBasicMaterial({
+      color: 0x4a3a2a,
+      transparent: true,
+      opacity: 0.9,
+    });
   }
   
   function createWorkpiece() {
@@ -106,14 +123,14 @@
       metalness: 0.1,
     });
     
-    // Create workpiece geometry
+    // Create workpiece geometry - lies on XY plane, extends down in Z
     const workpieceGeometry = new THREE.BoxGeometry(
       WORKPIECE_SIZE, 
       WORKPIECE_SIZE, 
       WORKPIECE_THICKNESS
     );
     workpiece = new THREE.Mesh(workpieceGeometry, workpieceMaterial);
-    workpiece.position.z = -WORKPIECE_THICKNESS / 2;
+    workpiece.position.z = -WORKPIECE_THICKNESS / 2; // Top surface at Z=0
     workpiece.receiveShadow = true;
     scene.add(workpiece);
   }
@@ -130,7 +147,6 @@
       roughness: 0.3,
     });
     const holder = new THREE.Mesh(holderGeometry, holderMaterial);
-    holder.rotation.x = Math.PI / 2;
     holder.position.z = 60;
     holderGroup.add(holder);
     
@@ -142,7 +158,6 @@
       roughness: 0.2,
     });
     const collet = new THREE.Mesh(colletGeometry, colletMaterial);
-    collet.rotation.x = Math.PI / 2;
     collet.position.z = 15;
     holderGroup.add(collet);
     
@@ -157,7 +172,6 @@
       roughness: 0.1,
     });
     const shank = new THREE.Mesh(shankGeometry, bitMaterial);
-    shank.rotation.x = Math.PI / 2;
     shank.position.z = -10;
     bitGroup.add(shank);
     
@@ -170,14 +184,13 @@
       emissive: 0x004422,
     });
     const flutes = new THREE.Mesh(fluteGeometry, fluteMaterial);
-    flutes.rotation.x = Math.PI / 2;
     flutes.position.z = -35;
     bitGroup.add(flutes);
     
     // Tip
     const tipGeometry = new THREE.ConeGeometry(8, 10, 8);
     const tip = new THREE.Mesh(tipGeometry, fluteMaterial);
-    tip.rotation.x = -Math.PI / 2;
+    tip.rotation.x = Math.PI; // Point down
     tip.position.z = -52;
     bitGroup.add(tip);
     
@@ -202,12 +215,15 @@
     // Update controls
     if (controls) controls.update();
     
+    // Get current machine state from active session
+    const machine = sessions.machine;
+    
     // Update tool position
     if (toolMesh && machine.position) {
       toolMesh.position.set(
         machine.position.X ?? 0,
         machine.position.Y ?? 0,
-        (machine.position.Z ?? 0) + 100
+        (machine.position.Z ?? 0) + 100 // Offset for tool holder
       );
       
       // Rotate the tool bit when spindle is on
@@ -226,6 +242,29 @@
   }
   
   function updateToolPath() {
+    // Get tool path from active session
+    const path = sessions.toolPath;
+    const currentIndex = sessions.currentIndex;
+    
+    // Remove old path if session changed or path significantly changed
+    if (toolPathLine && (path.length < lastToolPathLength || path.length === 0)) {
+      scene.remove(toolPathLine);
+      toolPathLine.geometry.dispose();
+      toolPathLine.material.dispose();
+      toolPathLine = null;
+      lastToolPathLength = 0;
+    }
+    
+    if (path.length < 2) {
+      lastToolPathLength = path.length;
+      return;
+    }
+    
+    // Only update if path changed
+    if (path.length === lastToolPathLength && toolPathLine) {
+      return;
+    }
+    
     // Remove old path
     if (toolPathLine) {
       scene.remove(toolPathLine);
@@ -233,20 +272,21 @@
       toolPathLine.material.dispose();
     }
     
-    const path = events.toolPath;
-    if (path.length < 2) return;
-    
     // Create geometry from points
     const points = path.map(p => new THREE.Vector3(p.x, p.y, p.z));
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     
-    // Color based on cut type
+    // Color based on cut type and whether it's before current index
     const colors = [];
-    for (const p of path) {
+    for (let i = 0; i < path.length; i++) {
+      const p = path[i];
+      const isPast = i <= currentIndex;
+      const brightness = isPast ? 1.0 : 0.4;
+      
       if (p.isCut) {
-        colors.push(0, 1, 0.5); // Green for cuts
+        colors.push(0 * brightness, 1 * brightness, 0.5 * brightness); // Green for cuts
       } else {
-        colors.push(0.3, 0.3, 0.4); // Gray for rapid moves
+        colors.push(0.3 * brightness, 0.3 * brightness, 0.4 * brightness); // Gray for rapid moves
       }
     }
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -258,13 +298,25 @@
     
     toolPathLine = new THREE.Line(geometry, material);
     scene.add(toolPathLine);
+    lastToolPathLength = path.length;
   }
   
   function updateCutMarks() {
-    const path = events.toolPath;
+    const path = sessions.toolPath;
+    const currentIndex = sessions.currentIndex;
     
-    // Create cut marks for cutting movements
-    for (let i = cutMarks.children.length; i < path.length; i++) {
+    // Clear cut marks if session changed (path reset)
+    if (path.length < cutMarks.children.length) {
+      while (cutMarks.children.length > 0) {
+        const child = cutMarks.children[0];
+        cutMarks.remove(child);
+        if (child.geometry) child.geometry.dispose();
+      }
+      drillHoles = [];
+    }
+    
+    // Create cut marks for cutting movements up to current index
+    for (let i = cutMarks.children.length; i < path.length && i <= currentIndex + 1; i++) {
       const p = path[i];
       const prev = path[i - 1];
       
@@ -274,18 +326,14 @@
           createLinearCutMark(prev, p);
         } else if (p.type === 'DrillCycle') {
           createDrillHole(p);
+        } else if (p.type === 'ArcCW' || p.type === 'ArcCCW') {
+          createLinearCutMark(prev, p); // Simplified arc as line for now
         }
       }
     }
   }
   
   function createLinearCutMark(from, to) {
-    const cutMaterial = new THREE.MeshBasicMaterial({
-      color: 0x2a2a2a,
-      transparent: true,
-      opacity: 0.8,
-    });
-    
     // Calculate cut path
     const dx = to.x - from.x;
     const dy = to.y - from.y;
@@ -293,14 +341,18 @@
     
     if (length < 1) return;
     
-    const cutGeometry = new THREE.PlaneGeometry(length, 8);
+    // Create a groove that shows material removal
+    const cutWidth = 8; // Width of the cut
+    const cutDepth = Math.min(Math.abs(to.z), WORKPIECE_THICKNESS);
+    
+    const cutGeometry = new THREE.BoxGeometry(length, cutWidth, cutDepth + 1);
     const cutMark = new THREE.Mesh(cutGeometry, cutMaterial);
     
     // Position and rotate
     cutMark.position.set(
       (from.x + to.x) / 2,
       (from.y + to.y) / 2,
-      0.5
+      -cutDepth / 2
     );
     cutMark.rotation.z = Math.atan2(dy, dx);
     
@@ -312,9 +364,10 @@
       color: 0x1a1a1a,
     });
     
-    const holeGeometry = new THREE.CircleGeometry(10, 16);
+    const depth = Math.min(Math.abs(point.z), WORKPIECE_THICKNESS);
+    const holeGeometry = new THREE.CylinderGeometry(8, 8, depth + 1, 16);
     const hole = new THREE.Mesh(holeGeometry, holeMaterial);
-    hole.position.set(point.x, point.y, 0.5);
+    hole.position.set(point.x, point.y, -depth / 2);
     
     cutMarks.add(hole);
     drillHoles.push(hole);
@@ -325,27 +378,44 @@
     const v = value?.toFixed(3) ?? '0.000';
     return `${v}`;
   }
+  
+  // Reactive getters
+  $effect(() => {
+    // This effect runs whenever active session changes
+    // Reset cut marks when session changes
+    const activeId = sessions.activeId;
+    if (activeId) {
+      // Clear all cut marks for fresh render
+      while (cutMarks && cutMarks.children.length > 0) {
+        const child = cutMarks.children[0];
+        cutMarks.remove(child);
+        if (child.geometry) child.geometry.dispose();
+      }
+      drillHoles = [];
+      lastToolPathLength = 0;
+    }
+  });
 </script>
 
 <div class="cnc-viewer" bind:this={container}>
   <div class="position-display">
-    <div class="unit-badge">{machine.unit}</div>
+    <div class="unit-badge">{sessions.machine.unit}</div>
     <div class="axis">
       <span class="label">X</span>
-      <span class="value">{formatPosition(machine.position.X)}</span>
+      <span class="value">{formatPosition(sessions.machine.position.X)}</span>
     </div>
     <div class="axis">
       <span class="label">Y</span>
-      <span class="value">{formatPosition(machine.position.Y)}</span>
+      <span class="value">{formatPosition(sessions.machine.position.Y)}</span>
     </div>
     <div class="axis">
       <span class="label">Z</span>
-      <span class="value">{formatPosition(machine.position.Z)}</span>
+      <span class="value">{formatPosition(sessions.machine.position.Z)}</span>
     </div>
-    {#if machine.spindleOn}
+    {#if sessions.machine.spindleOn}
       <div class="spindle-indicator">
         <span class="label">🔄</span>
-        <span class="value">{machine.spindle} RPM</span>
+        <span class="value">{sessions.machine.spindle} RPM</span>
       </div>
     {/if}
   </div>
@@ -356,10 +426,10 @@
   </div>
   
   <div class="stats">
-    <span>Events: {events.stats.total}</span>
-    <span>Rapid: {events.stats.rapidMoves}</span>
-    <span>Cuts: {events.stats.linearCuts}</span>
-    <span>Arcs: {events.stats.arcs}</span>
+    <span>Events: {sessions.stats.total}</span>
+    <span>Rapid: {sessions.stats.rapidMoves}</span>
+    <span>Cuts: {sessions.stats.linearCuts}</span>
+    <span>Arcs: {sessions.stats.arcs}</span>
   </div>
   
   <div class="controls-hint">
