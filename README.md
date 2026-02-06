@@ -37,7 +37,7 @@ Biblioteca em Go para validação end-to-end de programas G-code através de int
 - ✅ **Modelo Semântico** - Identifica furos, ranhuras e contornos automaticamente
 - ✅ **API de Assertions** - Interface fluente para validações estilo Playwright
 - ✅ **Sistema de Snapshots** - Testes baseados em snapshots para CI/CD
-- ⏳ **Renderização Visual** - Debug visual opcional (planejado)
+- ✅ **Renderização Visual** - Debug visual opcional com WebSocket
 
 ## Propósito
 
@@ -797,13 +797,58 @@ Consulte [ROADMAP.md](ROADMAP.md) para o planejamento completo e detalhado.
 | Fase 3 | Machining Model | ✅ Completo |
 | Fase 4 | Assertion API | ✅ Completo |
 | Fase 5 | Snapshot Engine | ✅ Completo |
-| Fase 6 | UI Renderer | ⏳ Planejado |
+| Fase 6 | UI Renderer | ✅ Completo |
 | Fase 7 | Tooling e DX | ⏳ Planejado |
 | Fase 8 | CI/CD e Releases | ⏳ Planejado |
 
 **Próximos passos:**
-- Adicionar renderização visual opcional (Fase 6)
 - Melhorar ferramentas e DX (Fase 7)
+- Configurar CI/CD e releases automatizados (Fase 8)
+
+---
+
+## Visualização UI (Fase 6)
+
+O gocode-check inclui uma UI opcional para visualização em tempo real dos testes.
+
+### Ativando a UI
+
+1. Configure no seu `TestMain`:
+
+```go
+func TestMain(m *testing.M) {
+    if os.Getenv("GOCODECHECK_UI") != "" {
+        cleanup := ui.Enable(ui.DefaultConfig())
+        defer cleanup()
+    }
+    os.Exit(m.Run())
+}
+```
+
+2. Execute os testes com a variável de ambiente:
+
+```bash
+GOCODECHECK_UI=1 go test -v ./...
+```
+
+### Configuração
+
+```go
+cfg := ui.DefaultConfig().
+    WithPort(8080).           // Porta do servidor (0 = automático)
+    WithSpeed(ui.SpeedSlow).  // Velocidade: Fast, Normal, Slow, Manual
+    WithAutoOpen(true).       // Abrir browser automaticamente
+    WithVerbose(true)         // Logs detalhados no console
+```
+
+### Velocidades
+
+| Preset | Delay | Uso |
+|--------|-------|-----|
+| `SpeedFast` | 50ms | Execução rápida |
+| `SpeedNormal` | 200ms | Desenvolvimento |
+| `SpeedSlow` | 500ms | Apresentações |
+| `SpeedManual` | - | Passo a passo |
 
 ---
 
@@ -814,15 +859,17 @@ Consulte [ROADMAP.md](ROADMAP.md) para o planejamento completo e detalhado.
 O projeto inclui um Makefile com comandos úteis para desenvolvimento:
 
 ```bash
-make help       # Mostrar todos os comandos disponíveis
-make fmt        # Formatar código com go fmt
-make lint       # Executar linters (go vet)
-make test       # Executar todos os testes
-make test-cover # Executar testes com relatório de cobertura
-make build      # Compilar binário CLI
-make release    # Build otimizado para release
-make clean      # Limpar artefatos de build
-make tidy       # Organizar dependências (go mod tidy)
+make help            # Mostrar todos os comandos disponíveis
+make fmt             # Formatar código com go fmt
+make lint            # Executar linters (go vet)
+make test            # Executar todos os testes
+make test-cover      # Executar testes com relatório de cobertura
+make build           # Compilar binário CLI
+make release         # Build otimizado para release
+make clean           # Limpar artefatos de build
+make tidy            # Organizar dependências (go mod tidy)
+make ui-test         # Executar testes com UI habilitada
+make test-ui-package # Executar testes do pacote UI
 ```
 
 ### Desenvolvimento Local com Hot Reload
