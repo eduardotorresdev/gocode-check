@@ -195,7 +195,7 @@ G1 Z-10 F100`
 	trace, model := traceAndModelFromGCode(t, gcode)
 
 	// Run an assertion that passes
-	Expect(trace, model).HasHole(50, 50).Assert(t)
+	_ = Expect(trace, model).HasHole(50, 50).Assert(t)
 
 	if obs.EventCount() != 1 {
 		t.Errorf("expected 1 event after Assert(), got %d", obs.EventCount())
@@ -242,7 +242,7 @@ G1 Z-10 F100`
 	mock := &mockT{}
 
 	// Run an assertion that fails (looking for hole at wrong position)
-	Expect(trace, model).HasHole(100, 100).Assert(mock)
+	_ = Expect(trace, model).HasHole(100, 100).Assert(mock)
 
 	if obs.EventCount() != 1 {
 		t.Errorf("expected 1 event after failed Assert(), got %d", obs.EventCount())
