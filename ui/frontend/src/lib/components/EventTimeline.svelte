@@ -22,7 +22,7 @@
   function getEventDescription(type) {
     switch (type) {
       case 'RapidMove': return 'Rapid positioning';
-      case 'LinearCut': return 'Linear cut';
+      case 'LinearCut': return 'Linear cutting';
       case 'ArcCW': return 'Clockwise arc';
       case 'ArcCCW': return 'Counter-clockwise arc';
       case 'SpindleStart': return 'Spindle on';
@@ -32,23 +32,6 @@
       case 'UnitChange': return 'Set units';
       case 'ModeChange': return 'Set mode';
       default: return 'Unknown';
-    }
-  }
-
-  function getOperationName(type) {
-    // More human-friendly operation names (no camelCase)
-    switch (type) {
-      case 'RapidMove': return 'Rapid Move';
-      case 'LinearCut': return 'Linear Cut';
-      case 'ArcCW': return 'Arc CW';
-      case 'ArcCCW': return 'Arc CCW';
-      case 'SpindleStart': return 'Spindle Start';
-      case 'SpindleStop': return 'Spindle Stop';
-      case 'ToolChange': return 'Tool Change';
-      case 'DrillCycle': return 'Drill Cycle';
-      case 'UnitChange': return 'Unit Change';
-      case 'ModeChange': return 'Mode Change';
-      default: return type || 'Unknown';
     }
   }
 
@@ -78,9 +61,6 @@
             style="background: {getEventColor(event.event?.Type)}; color: white;"
           >
             {getEventDescription(event.event?.Type)}
-          </div>
-          <div class="event-operation-name">
-            {getOperationName(event.event?.Type)}
           </div>
           {#if event.instruction?.RawLine}
             <div class="event-instruction">

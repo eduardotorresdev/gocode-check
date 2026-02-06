@@ -97,12 +97,10 @@
 
   function handlePlayOverlayClick() {
     // User clicked play on the overlay - resume from event 0 of current tab
-    // Note: Both frontend and backend handle the jump to ensure proper synchronization:
-    // - Frontend updates UI immediately for responsive feedback
-    // - Backend ensures the Go execution loop starts from the correct position
+    // Flow control is on the frontend side - we handle the jump here
     flow.resume();
     send({ type: 'resume' });
-    // Jump to event 0
+    // Jump to event 0 (frontend controls navigation)
     send({ type: 'jump_to', data: { index: 0 } });
     sessions.setCurrentIndex(0);
   }

@@ -277,8 +277,6 @@ func (s *Server) handleClientCommand(cmd Message) {
 		s.logger.Debug("Resume requested")
 		if s.flow != nil {
 			s.flow.Resume()
-			// When resuming, jump to event 0 of current tab
-			s.flow.JumpTo(0)
 			s.Broadcast(Message{
 				Type: "flow_state",
 				Data: map[string]interface{}{
