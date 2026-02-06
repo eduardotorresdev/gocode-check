@@ -1,0 +1,188 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/anthropic-cookbook/main/misc/mcp_server_schema.json",
+  "name": "gocode-check",
+  "version": "1.0.0",
+  "description": "Biblioteca Go para validação end-to-end de programas G-code através de interpretação lógica e análise semântica. Permite testes automatizados de programas CNC sem depender de máquina real.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eduardotorresdev/gocode-check"
+  },
+  "keywords": [
+    "gcode",
+    "cnc",
+    "machining",
+    "testing",
+    "validation",
+    "golang",
+    "manufacturing",
+    "automation"
+  ],
+  "capabilities": {
+    "parsing": {
+      "description": "Parse de programas G-code em instruções estruturadas",
+      "features": [
+        "Suporte a G0, G1, G2, G3 (movimentos)",
+        "Suporte a G20, G21 (unidades)",
+        "Suporte a G90, G91 (modos de posicionamento)",
+        "Suporte a códigos T (ferramentas)",
+        "Suporte a códigos M (spindle, fim de programa)",
+        "Remoção automática de comentários",
+        "Parser determinístico e stateless"
+      ]
+    },
+    "interpretation": {
+      "description": "Simulação lógica do estado da máquina CNC",
+      "features": [
+        "Rastreamento de posição X, Y, Z",
+        "Gerenciamento de estado (unidade, modo, ferramenta)",
+        "Geração de eventos para cada operação",
+        "Suporte a modo absoluto e incremental",
+        "Observer pattern para eventos em tempo real"
+      ]
+    },
+    "machining_analysis": {
+      "description": "Análise semântica de operações de usinagem",
+      "features": [
+        "Detecção automática de furos (plunge cuts)",
+        "Detecção de ranhuras (slots lineares)",
+        "Detecção de contornos (abertos e fechados)",
+        "Sistema de warnings para problemas não bloqueantes",
+        "Configuração customizada do analisador"
+      ]
+    },
+    "assertions": {
+      "description": "API fluente para validações estilo Playwright",
+      "features": [
+        "HasHole, HasSlot, HasContour",
+        "WithDiameter, WithDepth, WithTool",
+        "IsClosed, IsOpen, HasSegmentCount",
+        "NoOperationOutside (validação de limites)",
+        "Tolerância configurável",
+        "Integração nativa com testing.T"
+      ]
+    },
+    "snapshots": {
+      "description": "Testes baseados em snapshots para detecção de regressões",
+      "features": [
+        "Serialização JSON determinística",
+        "Comparação automática contra estado esperado",
+        "Diff legível em caso de falha",
+        "Atualização via variável de ambiente",
+        "Precisão configurável para floats"
+      ]
+    },
+    "visualization": {
+      "description": "Renderização visual opcional para debug",
+      "features": [
+        "Servidor WebSocket para UI em tempo real",
+        "Visualização 3D de operações",
+        "Velocidades configuráveis (fast, normal, slow, manual)",
+        "Abertura automática do browser"
+      ]
+    }
+  },
+  "installation": {
+    "go": "go get github.com/eduardotorresdev/gocode-check",
+    "requirements": {
+      "go_version": "1.22+"
+    }
+  },
+  "packages": {
+    "pkg/parser": {
+      "description": "Parser determinístico de G-code",
+      "main_types": ["Parser", "Instruction", "Params", "Op"],
+      "main_functions": ["ParseFile", "New().Parse()"]
+    },
+    "pkg/interpreter": {
+      "description": "Interpretador e simulador de estado CNC",
+      "main_types": ["Interpreter", "ExecutionTrace", "Event", "MachineState", "Position"],
+      "main_functions": ["ParseAndInterpret", "InterpretGCode", "New().Interpret()"]
+    },
+    "pkg/machining": {
+      "description": "Análise semântica de usinagem",
+      "main_types": ["Analyzer", "MachiningModel", "Hole", "Slot", "Contour", "Warnings"],
+      "main_functions": ["Analyze", "AnalyzeWithConfig", "NewAnalyzer()"]
+    },
+    "pkg/assert": {
+      "description": "API fluente de assertions",
+      "main_types": ["Assertion", "Bounds"],
+      "main_functions": ["Expect", "ExpectWithTolerance"]
+    },
+    "pkg/snapshot": {
+      "description": "Sistema de snapshots para testes de regressão",
+      "main_types": ["Snapshot", "Config", "CompareResult"],
+      "main_functions": ["AssertMatchesSnapshot", "Save", "Load", "Compare"]
+    },
+    "pkg/ui": {
+      "description": "Visualização em tempo real (opcional)",
+      "main_types": ["Config"],
+      "main_functions": ["Enable", "DefaultConfig"]
+    }
+  },
+  "usage_patterns": {
+    "basic_validation": {
+      "description": "Validação básica de programa G-code",
+      "code_example": "trace, _ := interpreter.ParseAndInterpret(gcode)\nmodel, _ := machining.Analyze(trace)\nassert.Expect(trace, model).HasHole(50, 50).Assert(t)"
+    },
+    "snapshot_testing": {
+      "description": "Teste baseado em snapshot",
+      "code_example": "trace, _ := interpreter.ParseAndInterpret(gcode)\nmodel, _ := machining.Analyze(trace)\nsnapshot.AssertMatchesSnapshot(t, model, \"my-part\")"
+    },
+    "detailed_analysis": {
+      "description": "Análise detalhada com inspeção manual",
+      "code_example": "trace, _ := interpreter.ParseAndInterpret(gcode)\nmodel, warnings := machining.Analyze(trace)\nfor _, hole := range model.Holes {\n  fmt.Printf(\"Hole at (%.2f, %.2f)\\n\", hole.Center.X, hole.Center.Y)\n}"
+    }
+  },
+  "supported_gcodes": {
+    "motion": ["G0", "G1", "G2", "G3"],
+    "positioning": ["G90", "G91"],
+    "units": ["G20", "G21"],
+    "tools": ["Tn"],
+    "spindle": ["M3", "M4", "M5"],
+    "program": ["M30"]
+  },
+  "architecture": {
+    "layers": [
+      {
+        "name": "Parser",
+        "level": "low",
+        "description": "Converte texto G-code em instruções estruturadas"
+      },
+      {
+        "name": "Interpreter",
+        "level": "medium-low",
+        "description": "Simula estado da máquina e gera eventos"
+      },
+      {
+        "name": "Machining Analyzer",
+        "level": "medium",
+        "description": "Converte eventos em entidades semânticas"
+      },
+      {
+        "name": "Assert API",
+        "level": "high",
+        "description": "Validações fluentes para testes"
+      },
+      {
+        "name": "Snapshot API",
+        "level": "high",
+        "description": "Testes de regressão baseados em golden files"
+      }
+    ],
+    "data_flow": "G-code String → Parser → []Instruction → Interpreter → ExecutionTrace → Analyzer → MachiningModel → Assert/Snapshot"
+  },
+  "testing": {
+    "commands": {
+      "all_tests": "go test ./...",
+      "with_coverage": "go test -cover ./...",
+      "with_ui": "GOCODECHECK_UI=1 go test -v ./...",
+      "update_snapshots": "UPDATE_SNAPSHOTS=true go test ./..."
+    }
+  },
+  "documentation": {
+    "readme": "README.md",
+    "usage_guide": "docs/USAGE_GUIDE.md",
+    "roadmap": "ROADMAP.md",
+    "examples": "examples/"
+  }
+}
