@@ -5,7 +5,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"time"
 )
 
@@ -37,7 +36,7 @@ func OpenBrowser(url string) error {
 	}
 	
 	// Create/update lock file with URL
-	_ = os.WriteFile(lockPath, []byte(url), 0644)
+	_ = os.WriteFile(lockPath, []byte(url), 0600)
 	
 	var cmd *exec.Cmd
 
@@ -70,11 +69,4 @@ func OpenBrowser(url string) error {
 func ClearBrowserLock() {
 	lockPath := filepath.Join(os.TempDir(), browserLockFile)
 	_ = os.Remove(lockPath)
-}
-
-// SetBrowserOpened marks that a browser was opened for the given port.
-// This can be used to track browser state across test runs.
-func SetBrowserOpened(port int) {
-	lockPath := filepath.Join(os.TempDir(), browserLockFile)
-	_ = os.WriteFile(lockPath, []byte(strconv.Itoa(port)), 0644)
 }

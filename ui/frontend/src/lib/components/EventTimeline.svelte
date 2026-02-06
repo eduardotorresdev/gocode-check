@@ -26,7 +26,7 @@
       case 'SpindleStart': return 'M3/M4';
       case 'SpindleStop': return 'M5';
       case 'ToolChange': return 'T';
-      case 'DrillCycle': return 'G81';
+      case 'DrillCycle': return 'G81-89';
       default: return '';
     }
   }

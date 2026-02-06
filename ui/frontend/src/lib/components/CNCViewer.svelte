@@ -243,8 +243,8 @@
         (machine.position.Z ?? 0) + 100 // Offset for tool holder
       );
       
-      // Rotate the tool bit ONLY when spindle is on AND flow is playing
-      if (machine.spindleOn && toolBit && flow.isPlaying) {
+      // Rotate the tool bit when spindle is on AND flow is not paused (playing or stepping)
+      if (machine.spindleOn && toolBit && !flow.isPaused) {
         const direction = machine.spindleCW ? 1 : -1;
         toolRotation += 0.15 * direction;
         toolBit.rotation.z = toolRotation;
