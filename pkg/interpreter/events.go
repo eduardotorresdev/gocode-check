@@ -1,5 +1,7 @@
 package interpreter
 
+import "encoding/json"
+
 // EventType represents the type of execution event.
 type EventType int
 
@@ -29,7 +31,7 @@ const (
 // MarshalJSON implements json.Marshaler for EventType.
 // Returns the string representation of the event type for JSON serialization.
 func (e EventType) MarshalJSON() ([]byte, error) {
-	return []byte(`"` + e.String() + `"`), nil
+	return json.Marshal(e.String())
 }
 
 // String returns the string representation of the event type.

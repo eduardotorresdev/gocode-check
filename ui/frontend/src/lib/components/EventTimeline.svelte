@@ -13,6 +13,8 @@
       case 'SpindleStop': return 'var(--accent-orange, #ff8800)';
       case 'ToolChange': return 'var(--accent-purple)';
       case 'DrillCycle': return 'var(--accent-blue)';
+      case 'UnitChange': return 'var(--accent-cyan)';
+      case 'ModeChange': return 'var(--accent-cyan)';
       default: return 'var(--text-secondary)';
     }
   }
@@ -27,6 +29,8 @@
       case 'SpindleStop': return 'Spindle off';
       case 'ToolChange': return 'Tool change';
       case 'DrillCycle': return 'Drill cycle';
+      case 'UnitChange': return 'Set units';
+      case 'ModeChange': return 'Set mode';
       default: return 'Unknown';
     }
   }
