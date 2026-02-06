@@ -47,5 +47,5 @@
 //   - Server URL in a formatted box
 //   - Connection status (browser connected/disconnected)
 //   - Test names and progress
-//   - Expectation results (✅/❌)
+//   - Expectation results (✓/✗)
 package ui
