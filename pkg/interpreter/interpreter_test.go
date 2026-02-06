@@ -637,6 +637,35 @@ func TestEventType_String(t *testing.T) {
 	}
 }
 
+func TestEventType_MarshalJSON(t *testing.T) {
+	tests := []struct {
+		eventType EventType
+		want      string
+	}{
+		{EventRapidMove, `"RapidMove"`},
+		{EventLinearCut, `"LinearCut"`},
+		{EventArcCW, `"ArcCW"`},
+		{EventArcCCW, `"ArcCCW"`},
+		{EventDrillCycle, `"DrillCycle"`},
+		{EventToolChange, `"ToolChange"`},
+		{EventSpindleStart, `"SpindleStart"`},
+		{EventSpindleStop, `"SpindleStop"`},
+		{EventUnitChange, `"UnitChange"`},
+		{EventModeChange, `"ModeChange"`},
+	}
+
+	for _, tt := range tests {
+		got, err := tt.eventType.MarshalJSON()
+		if err != nil {
+			t.Errorf("EventType(%d).MarshalJSON() error = %v", tt.eventType, err)
+			continue
+		}
+		if string(got) != tt.want {
+			t.Errorf("EventType(%d).MarshalJSON() = %s, want %s", tt.eventType, string(got), tt.want)
+		}
+	}
+}
+
 func BenchmarkInterpreter_Interpret(b *testing.B) {
 	gcode := `G21
 G90

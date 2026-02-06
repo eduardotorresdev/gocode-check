@@ -13,6 +13,8 @@
       case 'SpindleStop': return 'var(--accent-orange, #ff8800)';
       case 'ToolChange': return 'var(--accent-purple)';
       case 'DrillCycle': return 'var(--accent-blue)';
+      case 'UnitChange': return 'var(--accent-cyan)';
+      case 'ModeChange': return 'var(--accent-cyan)';
       default: return 'var(--text-secondary)';
     }
   }
@@ -27,6 +29,8 @@
       case 'SpindleStop': return 'Spindle off';
       case 'ToolChange': return 'Tool change';
       case 'DrillCycle': return 'Drill cycle';
+      case 'UnitChange': return 'Set units';
+      case 'ModeChange': return 'Set mode';
       default: return 'Unknown';
     }
   }
@@ -58,9 +62,14 @@
           >
             {getEventDescription(event.event?.Type)}
           </div>
-          <div class="event-instruction">
-            <code>{event.instruction?.RawLine ?? '-'}</code>
+          <div class="event-operation-name">
+            {event.event?.Type ?? 'unknown'}
           </div>
+          {#if event.instruction?.RawLine}
+            <div class="event-instruction">
+              <code>{event.instruction.RawLine}</code>
+            </div>
+          {/if}
         </div>
         {#if event.hasError}
           <span class="error-badge">Error</span>
@@ -159,7 +168,7 @@
   .event-info {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
     flex: 1;
     min-width: 0;
   }
@@ -173,6 +182,13 @@
     overflow: hidden;
     text-overflow: ellipsis;
     width: fit-content;
+  }
+  
+  .event-operation-name {
+    font-size: 9px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    opacity: 0.8;
   }
   
   .event-instruction {

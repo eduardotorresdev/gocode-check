@@ -142,96 +142,123 @@
   }
   
   function createMillingTool() {
-    // Tool holder (spindle body)
+    // Tool holder group
     const holderGroup = new THREE.Group();
     
-    // Spindle body
-    const holderGeometry = new THREE.CylinderGeometry(20, 25, 80, 16);
-    const holderMaterial = new THREE.MeshStandardMaterial({
-      color: 0x666666,
-      metalness: 0.8,
-      roughness: 0.3,
+    // Motor housing (square box)
+    const motorSize = 40;
+    const motorHeight = 60;
+    const motorGeometry = new THREE.BoxGeometry(motorSize, motorSize, motorHeight);
+    const motorMaterial = new THREE.MeshStandardMaterial({
+      color: 0x444444,
+      metalness: 0.7,
+      roughness: 0.4,
     });
-    const holder = new THREE.Mesh(holderGeometry, holderMaterial);
-    holder.position.z = 60;
-    holderGroup.add(holder);
+    const motor = new THREE.Mesh(motorGeometry, motorMaterial);
+    motor.position.z = 70;
+    holderGroup.add(motor);
     
-    // Collet
-    const colletGeometry = new THREE.CylinderGeometry(12, 15, 20, 16);
+    // Motor mounting plate
+    const plateGeometry = new THREE.BoxGeometry(motorSize + 10, motorSize + 10, 5);
+    const plateMaterial = new THREE.MeshStandardMaterial({
+      color: 0x555555,
+      metalness: 0.6,
+      roughness: 0.5,
+    });
+    const plate = new THREE.Mesh(plateGeometry, plateMaterial);
+    plate.position.z = 38;
+    holderGroup.add(plate);
+    
+    // Collet/shaft housing
+    const colletGeometry = new THREE.CylinderGeometry(10, 12, 15, 16);
     const colletMaterial = new THREE.MeshStandardMaterial({
       color: 0x888888,
       metalness: 0.9,
       roughness: 0.2,
     });
     const collet = new THREE.Mesh(colletGeometry, colletMaterial);
-    collet.position.z = 15;
+    collet.rotation.x = Math.PI / 2; // Align with Z axis
+    collet.position.z = 28;
     holderGroup.add(collet);
     
-    // Milling bit (the cutter) - textured cylinder
+    // Milling bit group (the rotating part)
     const bitGroup = new THREE.Group();
     
-    // Shank
-    const shankGeometry = new THREE.CylinderGeometry(5, 5, 30, 16);
-    const bitMaterial = new THREE.MeshStandardMaterial({
+    // Shank (connection between collet and cutter)
+    const shankGeometry = new THREE.CylinderGeometry(5, 5, 20, 16);
+    const shankMaterial = new THREE.MeshStandardMaterial({
       color: 0xCCCCCC,
       metalness: 0.9,
       roughness: 0.1,
     });
-    const shank = new THREE.Mesh(shankGeometry, bitMaterial);
-    shank.position.z = -10;
+    const shank = new THREE.Mesh(shankGeometry, shankMaterial);
+    shank.rotation.x = Math.PI / 2; // Align with Z axis
+    shank.position.z = 10;
     bitGroup.add(shank);
     
-    // Textured cutting cylinder with spiral flutes
-    const fluteRadius = 8;
-    const fluteHeight = 25;
-    const numFlutes = 4;
+    // Candy cane milling cutter (red and white spiral stripes)
+    const cutterRadius = 8;
+    const cutterHeight = 35;
+    const numStripes = 8; // Number of spiral stripes
     
-    // Create main cutting body as a cylinder
-    const cuttingGeometry = new THREE.CylinderGeometry(fluteRadius, fluteRadius, fluteHeight, 32);
-    const cuttingMaterial = new THREE.MeshStandardMaterial({
-      color: 0x00ff88,
-      metalness: 0.7,
-      roughness: 0.3,
-      emissive: 0x002211,
-    });
-    const cuttingBody = new THREE.Mesh(cuttingGeometry, cuttingMaterial);
-    cuttingBody.position.z = -35;
-    bitGroup.add(cuttingBody);
+    // Create the candy cane pattern with alternating red and white segments
+    const cutterGroup = new THREE.Group();
     
-    // Add visible flute grooves (dark stripes around the cylinder)
-    for (let i = 0; i < numFlutes; i++) {
-      const angle = (i / numFlutes) * Math.PI * 2;
-      const grooveGeometry = new THREE.BoxGeometry(2, fluteHeight, fluteRadius * 0.3);
-      const grooveMaterial = new THREE.MeshStandardMaterial({
-        color: 0x004422,
-        metalness: 0.6,
+    // Create spiral stripes around the cylinder
+    for (let i = 0; i < numStripes; i++) {
+      const isRed = i % 2 === 0;
+      const segmentAngle = (Math.PI * 2) / numStripes;
+      
+      // Create a segment of the cylinder using custom geometry
+      const segmentGeometry = new THREE.CylinderGeometry(
+        cutterRadius, cutterRadius, cutterHeight, 8, 8, false,
+        i * segmentAngle, segmentAngle
+      );
+      
+      const segmentMaterial = new THREE.MeshStandardMaterial({
+        color: isRed ? 0xcc2222 : 0xffffff,
+        metalness: 0.5,
         roughness: 0.4,
+        side: THREE.DoubleSide,
       });
-      const groove = new THREE.Mesh(grooveGeometry, grooveMaterial);
-      // Position groove on cylinder surface
-      groove.position.set(fluteRadius * 0.85, 0, 0);
       
-      // Create a pivot group to rotate the groove around the cylinder
-      const groovePivot = new THREE.Group();
-      groovePivot.add(groove);
-      groovePivot.position.z = -35;
-      groovePivot.rotation.x = Math.PI / 2;
-      groovePivot.rotation.z = angle;
-      
-      bitGroup.add(groovePivot);
+      const segment = new THREE.Mesh(segmentGeometry, segmentMaterial);
+      cutterGroup.add(segment);
     }
     
-    // Tip
-    const tipGeometry = new THREE.ConeGeometry(fluteRadius, 10, 8);
-    const tipMaterial = new THREE.MeshStandardMaterial({
-      color: 0x00ff88,
-      metalness: 0.7,
+    // Add top and bottom caps
+    const capGeometry = new THREE.CircleGeometry(cutterRadius, 32);
+    const capMaterial = new THREE.MeshStandardMaterial({
+      color: 0xdddddd,
+      metalness: 0.6,
       roughness: 0.3,
-      emissive: 0x002211,
+    });
+    
+    const topCap = new THREE.Mesh(capGeometry, capMaterial);
+    topCap.position.y = cutterHeight / 2;
+    topCap.rotation.x = -Math.PI / 2;
+    cutterGroup.add(topCap);
+    
+    const bottomCap = new THREE.Mesh(capGeometry, capMaterial);
+    bottomCap.position.y = -cutterHeight / 2;
+    bottomCap.rotation.x = Math.PI / 2;
+    cutterGroup.add(bottomCap);
+    
+    // Rotate the cutter group to align with Z axis
+    cutterGroup.rotation.x = Math.PI / 2;
+    cutterGroup.position.z = -20;
+    bitGroup.add(cutterGroup);
+    
+    // Flat end tip (typical for end mill)
+    const tipGeometry = new THREE.CylinderGeometry(cutterRadius - 1, cutterRadius, 3, 16);
+    const tipMaterial = new THREE.MeshStandardMaterial({
+      color: 0xaaaaaa,
+      metalness: 0.8,
+      roughness: 0.2,
     });
     const tip = new THREE.Mesh(tipGeometry, tipMaterial);
-    tip.rotation.x = Math.PI; // Point down
-    tip.position.z = -52;
+    tip.rotation.x = Math.PI / 2;
+    tip.position.z = -39;
     bitGroup.add(tip);
     
     // Glow effect at the tool tip
@@ -242,7 +269,7 @@
       opacity: 0.6,
     });
     toolGlow = new THREE.Mesh(glowGeometry, glowMaterial);
-    toolGlow.position.z = -57; // At the tip
+    toolGlow.position.z = -45; // At the tip
     bitGroup.add(toolGlow);
     
     toolBit = bitGroup;
