@@ -1,6 +1,10 @@
 <script>
-  import { connection } from '../state/connection.svelte.js';
-  import { expectations } from '../state/expectations.svelte.js';
+  import { connection, reconnect } from '../state/connection.svelte.js';
+  import { sessions } from '../state/sessions.svelte.js';
+  
+  function handleReconnect() {
+    reconnect();
+  }
 </script>
 
 <header class="header">
@@ -11,13 +15,13 @@
   </div>
   
   <div class="test-info">
-    {#if expectations.test.name}
-      <span class="test-name">🧪 {expectations.test.name}</span>
-      {#if expectations.test.running}
+    {#if sessions.active}
+      <span class="test-name">🧪 {sessions.active.testName}</span>
+      {#if sessions.active.running}
         <span class="test-status running">Running...</span>
-      {:else if expectations.test.allPassed === true}
+      {:else if sessions.active.allPassed === true}
         <span class="test-status passed">✓ Passed</span>
-      {:else if expectations.test.allPassed === false}
+      {:else if sessions.active.allPassed === false}
         <span class="test-status failed">✗ Failed</span>
       {/if}
     {/if}
@@ -35,10 +39,10 @@
         Reconnecting...
       </span>
     {:else}
-      <span class="status disconnected">
+      <button class="status disconnected" onclick={handleReconnect}>
         <span class="dot"></span>
-        Disconnected
-      </span>
+        Disconnected - Click to reconnect
+      </button>
     {/if}
   </div>
 </header>
@@ -125,6 +129,18 @@
     padding: 4px 8px;
     border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
+    border: none;
+    color: var(--text-primary);
+    cursor: default;
+  }
+  
+  button.status {
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+  
+  button.status:hover {
+    background: var(--bg-hover);
   }
   
   .dot {

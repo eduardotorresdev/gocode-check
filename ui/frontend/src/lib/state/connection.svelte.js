@@ -33,6 +33,10 @@ export const connection = {
 let ws = null;
 let reconnectTimeout = null;
 let messageHandler = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 10;
+const BASE_RECONNECT_DELAY = 1000; // 1 second
+const MAX_RECONNECT_DELAY = 30000; // 30 seconds
 
 export function connect(onMessage) {
   messageHandler = onMessage;
@@ -50,24 +54,37 @@ export function connect(onMessage) {
     ws.onopen = () => {
       console.log('[WS] Connected');
       connection.setConnected(true);
+      reconnectAttempts = 0; // Reset on successful connection
     };
     
     ws.onclose = (event) => {
-      console.log('[WS] Disconnected', event.code);
+      console.log('[WS] Disconnected', event.code, event.reason);
       connection.setConnected(false);
       
-      if (!event.wasClean) {
+      // Always try to reconnect (tests ending is a normal close)
+      // Use exponential backoff with jitter
+      if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
         connection.setReconnecting(true);
+        reconnectAttempts++;
+        const delay = Math.min(
+          BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1) + Math.random() * 1000,
+          MAX_RECONNECT_DELAY
+        );
+        console.log(`[WS] Reconnecting in ${Math.round(delay)}ms (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
         reconnectTimeout = setTimeout(() => {
-          console.log('[WS] Reconnecting...');
           createConnection();
-        }, 2000);
+        }, delay);
+      } else {
+        console.log('[WS] Max reconnection attempts reached. Click to reconnect.');
+        connection.setError('Connection lost. Server may have stopped.');
+        connection.setReconnecting(false);
       }
     };
     
     ws.onerror = (error) => {
       console.error('[WS] Error:', error);
-      connection.setError('Connection error');
+      // Don't set error state here - let onclose handle it
+      // This prevents double error messages
     };
     
     ws.onmessage = (event) => {
@@ -94,4 +111,48 @@ export function send(message) {
     ws.send(JSON.stringify(message));
     console.log('[WS] Sent:', message.type);
   }
+}
+
+// Allow manual reconnection
+export function reconnect() {
+  reconnectAttempts = 0;
+  if (reconnectTimeout) clearTimeout(reconnectTimeout);
+  connection.setReconnecting(true);
+  // Small delay before reconnecting
+  reconnectTimeout = setTimeout(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    
+    if (ws) {
+      ws.close();
+    }
+    
+    ws = new WebSocket(wsUrl);
+    
+    ws.onopen = () => {
+      console.log('[WS] Reconnected');
+      connection.setConnected(true);
+      reconnectAttempts = 0;
+    };
+    
+    ws.onclose = (event) => {
+      console.log('[WS] Disconnected', event.code);
+      connection.setConnected(false);
+      connection.setReconnecting(false);
+    };
+    
+    ws.onerror = () => {
+      connection.setError('Failed to reconnect');
+      connection.setReconnecting(false);
+    };
+    
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        messageHandler?.(msg);
+      } catch (err) {
+        console.error('[WS] Parse error:', err);
+      }
+    };
+  }, 500);
 }

@@ -1,5 +1,5 @@
 <script>
-  import { events } from '../state/events.svelte.js';
+  import { sessions } from '../state/sessions.svelte.js';
   
   let { onEventClick = () => {} } = $props();
   
@@ -12,6 +12,7 @@
       case 'SpindleStart': return 'var(--accent-yellow)';
       case 'SpindleStop': return 'var(--accent-red)';
       case 'ToolChange': return 'var(--accent-purple)';
+      case 'DrillCycle': return 'var(--accent-orange, #ff8800)';
       default: return 'var(--text-secondary)';
     }
   }
@@ -24,15 +25,15 @@
 <div class="event-timeline">
   <div class="timeline-header">
     <h3>Event Timeline</h3>
-    <span class="counter">{events.currentIndex + 1} / {events.stats.total}</span>
+    <span class="counter">{sessions.currentIndex + 1} / {sessions.stats.total}</span>
   </div>
   
   <div class="timeline-list">
-    {#each events.list as event, i}
+    {#each sessions.events as event, i}
       <button 
         class="event-item"
-        class:current={i === events.currentIndex}
-        class:past={i < events.currentIndex}
+        class:current={i === sessions.currentIndex}
+        class:past={i < sessions.currentIndex}
         onclick={() => handleClick(event.index)}
       >
         <div class="event-index">{event.index}</div>
@@ -51,7 +52,11 @@
       </button>
     {:else}
       <div class="empty">
-        Waiting for events...
+        {#if sessions.count === 0}
+          Waiting for test session...
+        {:else}
+          Waiting for events...
+        {/if}
       </div>
     {/each}
   </div>
