@@ -18,9 +18,11 @@ Biblioteca em Go para validação end-to-end de programas G-code através de int
   - [Machining Model](#machining-model)
   - [Configuração](#configuração)
   - [Modos de Execução](#modos-de-execução)
+- [Guia Completo de Uso](#guia-completo-de-uso)
 - [Detalhes de Implementação](#detalhes-de-implementação)
 - [Roadmap](#roadmap)
 - [Desenvolvimento](#desenvolvimento)
+- [MCP (Model Context Protocol)](#mcp-model-context-protocol)
 - [Contribuindo](#contribuindo)
 - [Licença](#licença)
 
@@ -783,6 +785,20 @@ if math.Abs(a - b) < tolerance {
 
 ---
 
+## Guia Completo de Uso
+
+Para um guia detalhado de como usar a biblioteca, desde o nível mais alto (Assert API) até o nível mais baixo (Parser), consulte:
+
+📖 **[docs/USAGE_GUIDE.md](docs/USAGE_GUIDE.md)**
+
+O guia inclui:
+- Visão geral das camadas da biblioteca
+- Exemplos práticos para cada nível de abstração
+- Fluxo completo de dados entre as camadas
+- Quando usar cada componente
+
+---
+
 ## Roadmap
 
 Consulte [ROADMAP.md](ROADMAP.md) para o planejamento completo e detalhado.
@@ -899,6 +915,23 @@ go test -v ./pkg/parser
 # Executar um teste específico
 go test -v -run TestParser_Parse_G0 ./pkg/parser
 ```
+
+---
+
+## MCP (Model Context Protocol)
+
+A biblioteca inclui um arquivo `mcp.json` que descreve suas capacidades para assistentes de IA e ferramentas que suportam o Model Context Protocol.
+
+📄 **[mcp.json](mcp.json)**
+
+O arquivo MCP documenta:
+- **Capacidades**: Parsing, interpretação, análise de usinagem, assertions e snapshots
+- **Pacotes**: Descrição de cada pacote e suas funções principais
+- **Padrões de uso**: Exemplos de código para cenários comuns
+- **Códigos G suportados**: Lista completa de códigos G/M suportados
+- **Arquitetura**: Visão geral das camadas e fluxo de dados
+
+Este arquivo permite que assistentes de IA entendam melhor a biblioteca e forneçam sugestões mais precisas ao desenvolver com gocode-check.
 
 ---
 
