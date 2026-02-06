@@ -127,8 +127,28 @@ export const sessions = {
 
   // Select active session (for viewing)
   setActive(sessionId) {
-    if (sessionList.some(s => s.id === sessionId)) {
+    const session = sessionList.find(s => s.id === sessionId);
+    if (session) {
       activeSessionId = sessionId;
+      // When switching tabs, restore the machine state from that session's last event
+      // This ensures the viewer shows the correct state for the selected session
+      if (session.events.length > 0 && session.currentIndex >= 0) {
+        const event = session.events.find(e => e.index === session.currentIndex);
+        if (event?.stateAfter) {
+          const newMachine = { ...session.machine };
+          if (event.stateAfter.Position) {
+            newMachine.position = { ...event.stateAfter.Position };
+          }
+          if (event.stateAfter.Unit) newMachine.unit = event.stateAfter.Unit;
+          if (event.stateAfter.Mode) newMachine.mode = event.stateAfter.Mode;
+          if (event.stateAfter.Tool !== undefined) newMachine.tool = event.stateAfter.Tool;
+          if (event.stateAfter.Feed !== undefined) newMachine.feed = event.stateAfter.Feed;
+          if (event.stateAfter.Spindle !== undefined) newMachine.spindle = event.stateAfter.Spindle;
+          if (event.stateAfter.SpindleOn !== undefined) newMachine.spindleOn = event.stateAfter.SpindleOn;
+          if (event.stateAfter.SpindleCW !== undefined) newMachine.spindleCW = event.stateAfter.SpindleCW;
+          session.machine = newMachine;
+        }
+      }
     }
   },
 

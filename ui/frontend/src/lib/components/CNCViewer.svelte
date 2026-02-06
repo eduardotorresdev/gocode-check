@@ -3,12 +3,15 @@
   import * as THREE from 'three';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
   import { sessions } from '../state/sessions.svelte.js';
+  import { flow } from '../state/flow.svelte.js';
   
   let container;
   let scene, camera, renderer, controls;
-  let toolPathLine = null;
+  let toolPathWorking = null; // Green path for cutting operations
+  let toolPathMoving = null;  // Red path for rapid moves
   let toolMesh = null;
   let toolBit = null;
+  let toolGlow = null;  // Glow effect at tool tip
   let gridHelper = null;
   let workpiece = null;
   let cutMarks = null;
@@ -22,6 +25,7 @@
   const VIEW_WIDTH = 3000; // 3000mm = 3m
   const WORKPIECE_SIZE = 2000; // 2m x 2m workpiece
   const WORKPIECE_THICKNESS = 50; // 50mm thick
+  const PATH_LINE_WIDTH = 3; // Thicker path lines
   
   onMount(() => {
     initScene();
@@ -40,9 +44,9 @@
   });
   
   function initScene() {
-    // Scene
+    // Scene with white background
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0a0f);
+    scene.background = new THREE.Color(0xffffff);
     
     // Camera - positioned to look at XY plane from above (Z is up)
     // Camera is at (1500, -1500, 1500) - positive X, negative Y, positive Z
@@ -74,7 +78,7 @@
     controls.target.set(0, 0, 0);
     
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+    const ambientLight = new THREE.AmbientLight(0x606060, 0.8);
     scene.add(ambientLight);
     
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
@@ -89,8 +93,8 @@
     directionalLight2.position.set(-500, 500, 500);
     scene.add(directionalLight2);
     
-    // Grid on XY plane (Z=0 is the workpiece surface)
-    gridHelper = new THREE.GridHelper(VIEW_WIDTH, 30, 0x3a3a4a, 0x2a2a3a);
+    // Grid on XY plane (Z=0 is the workpiece surface) - lighter grid for white background
+    gridHelper = new THREE.GridHelper(VIEW_WIDTH, 30, 0xcccccc, 0xe0e0e0);
     gridHelper.rotation.x = Math.PI / 2; // Rotate to XY plane
     gridHelper.position.z = 0.5; // Slightly above workpiece surface
     scene.add(gridHelper);
@@ -99,7 +103,7 @@
     const axesHelper = new THREE.AxesHelper(300);
     scene.add(axesHelper);
     
-    // Workpiece (on XY plane, Z down)
+    // Workpiece (on XY plane, Z down) - black color
     createWorkpiece();
     
     // Milling cutter tool (above workpiece, Z positive)
@@ -111,18 +115,18 @@
     
     // Pre-create cut material
     cutMaterial = new THREE.MeshBasicMaterial({
-      color: 0x4a3a2a,
+      color: 0x3a3a3a,
       transparent: true,
       opacity: 0.9,
     });
   }
   
   function createWorkpiece() {
-    // Workpiece material
+    // Workpiece material - black color
     const workpieceMaterial = new THREE.MeshStandardMaterial({
-      color: 0x8B7355, // Brown wood-like color
-      roughness: 0.8,
-      metalness: 0.1,
+      color: 0x1a1a1a, // Dark black
+      roughness: 0.6,
+      metalness: 0.2,
     });
     
     // Create workpiece geometry - lies on XY plane, extends down in Z
@@ -196,6 +200,17 @@
     tip.position.z = -52;
     bitGroup.add(tip);
     
+    // Glow effect at the tool tip
+    const glowGeometry = new THREE.SphereGeometry(12, 16, 16);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00ffff,
+      transparent: true,
+      opacity: 0.6,
+    });
+    toolGlow = new THREE.Mesh(glowGeometry, glowMaterial);
+    toolGlow.position.z = -57; // At the tip
+    bitGroup.add(toolGlow);
+    
     toolBit = bitGroup;
     holderGroup.add(bitGroup);
     
@@ -228,11 +243,18 @@
         (machine.position.Z ?? 0) + 100 // Offset for tool holder
       );
       
-      // Rotate the tool bit when spindle is on
-      if (machine.spindleOn && toolBit) {
+      // Rotate the tool bit when spindle is on AND flow is not paused (playing or stepping)
+      if (machine.spindleOn && toolBit && !flow.isPaused) {
         const direction = machine.spindleCW ? 1 : -1;
         toolRotation += 0.15 * direction;
         toolBit.rotation.z = toolRotation;
+      }
+      
+      // Animate glow effect
+      if (toolGlow) {
+        const time = Date.now() * 0.003;
+        toolGlow.material.opacity = 0.4 + Math.sin(time) * 0.2;
+        toolGlow.scale.setScalar(1 + Math.sin(time * 2) * 0.1);
       }
     }
     
@@ -248,12 +270,20 @@
     const path = sessions.toolPath;
     const currentIndex = sessions.currentIndex;
     
-    // Remove old path if session changed or path significantly changed
-    if (toolPathLine && (path.length < lastToolPathLength || path.length === 0)) {
-      scene.remove(toolPathLine);
-      toolPathLine.geometry.dispose();
-      toolPathLine.material.dispose();
-      toolPathLine = null;
+    // Remove old paths if session changed or path significantly changed
+    if ((toolPathWorking || toolPathMoving) && (path.length < lastToolPathLength || path.length === 0)) {
+      if (toolPathWorking) {
+        scene.remove(toolPathWorking);
+        toolPathWorking.geometry.dispose();
+        toolPathWorking.material.dispose();
+        toolPathWorking = null;
+      }
+      if (toolPathMoving) {
+        scene.remove(toolPathMoving);
+        toolPathMoving.geometry.dispose();
+        toolPathMoving.material.dispose();
+        toolPathMoving = null;
+      }
       lastToolPathLength = 0;
     }
     
@@ -263,43 +293,94 @@
     }
     
     // Only update if path changed
-    if (path.length === lastToolPathLength && toolPathLine) {
+    if (path.length === lastToolPathLength && toolPathWorking && toolPathMoving) {
       return;
     }
     
-    // Remove old path
-    if (toolPathLine) {
-      scene.remove(toolPathLine);
-      toolPathLine.geometry.dispose();
-      toolPathLine.material.dispose();
+    // Remove old paths
+    if (toolPathWorking) {
+      scene.remove(toolPathWorking);
+      toolPathWorking.geometry.dispose();
+      toolPathWorking.material.dispose();
+    }
+    if (toolPathMoving) {
+      scene.remove(toolPathMoving);
+      toolPathMoving.geometry.dispose();
+      toolPathMoving.material.dispose();
     }
     
-    // Create geometry from points
-    const points = path.map(p => new THREE.Vector3(p.x, p.y, p.z));
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    // Separate points for working and moving paths
+    const workingSegments = [];
+    const movingSegments = [];
     
-    // Color based on cut type and whether it's before current index
-    const colors = [];
-    for (let i = 0; i < path.length; i++) {
-      const p = path[i];
+    for (let i = 1; i < path.length; i++) {
+      const prev = path[i - 1];
+      const curr = path[i];
       const isPast = i <= currentIndex;
-      const brightness = isPast ? 1.0 : 0.4;
       
-      if (p.isCut) {
-        colors.push(0 * brightness, 1 * brightness, 0.5 * brightness); // Green for cuts
+      const segment = {
+        points: [
+          new THREE.Vector3(prev.x, prev.y, prev.z),
+          new THREE.Vector3(curr.x, curr.y, curr.z)
+        ],
+        isPast
+      };
+      
+      if (curr.isCut) {
+        workingSegments.push(segment);
       } else {
-        colors.push(0.3 * brightness, 0.3 * brightness, 0.4 * brightness); // Gray for rapid moves
+        movingSegments.push(segment);
       }
     }
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     
-    const material = new THREE.LineBasicMaterial({ 
-      vertexColors: true,
-      linewidth: 2
-    });
+    // Create working path (green)
+    if (workingSegments.length > 0) {
+      const workingPoints = [];
+      const workingColors = [];
+      for (const seg of workingSegments) {
+        workingPoints.push(...seg.points);
+        const brightness = seg.isPast ? 1.0 : 0.3;
+        // Green color
+        workingColors.push(0 * brightness, 0.8 * brightness, 0 * brightness);
+        workingColors.push(0 * brightness, 0.8 * brightness, 0 * brightness);
+      }
+      
+      const workingGeometry = new THREE.BufferGeometry().setFromPoints(workingPoints);
+      workingGeometry.setAttribute('color', new THREE.Float32BufferAttribute(workingColors, 3));
+      
+      const workingMaterial = new THREE.LineBasicMaterial({ 
+        vertexColors: true,
+        linewidth: PATH_LINE_WIDTH
+      });
+      
+      toolPathWorking = new THREE.LineSegments(workingGeometry, workingMaterial);
+      scene.add(toolPathWorking);
+    }
     
-    toolPathLine = new THREE.Line(geometry, material);
-    scene.add(toolPathLine);
+    // Create moving path (red)
+    if (movingSegments.length > 0) {
+      const movingPoints = [];
+      const movingColors = [];
+      for (const seg of movingSegments) {
+        movingPoints.push(...seg.points);
+        const brightness = seg.isPast ? 1.0 : 0.3;
+        // Red color
+        movingColors.push(0.8 * brightness, 0 * brightness, 0 * brightness);
+        movingColors.push(0.8 * brightness, 0 * brightness, 0 * brightness);
+      }
+      
+      const movingGeometry = new THREE.BufferGeometry().setFromPoints(movingPoints);
+      movingGeometry.setAttribute('color', new THREE.Float32BufferAttribute(movingColors, 3));
+      
+      const movingMaterial = new THREE.LineBasicMaterial({ 
+        vertexColors: true,
+        linewidth: PATH_LINE_WIDTH
+      });
+      
+      toolPathMoving = new THREE.LineSegments(movingGeometry, movingMaterial);
+      scene.add(toolPathMoving);
+    }
+    
     lastToolPathLength = path.length;
   }
   
@@ -427,6 +508,17 @@
   <div class="scale-ruler">
     <div class="ruler-bar"></div>
     <span class="ruler-label">500mm</span>
+  </div>
+  
+  <div class="path-legend">
+    <div class="legend-item">
+      <span class="legend-color working"></span>
+      <span class="legend-text">Cutting (Z ↓)</span>
+    </div>
+    <div class="legend-item">
+      <span class="legend-color moving"></span>
+      <span class="legend-text">Rapid (Z ↑)</span>
+    </div>
   </div>
   
   <div class="stats">
@@ -586,5 +678,44 @@
     font-size: 10px;
     color: var(--text-muted);
     z-index: 10;
+  }
+  
+  .path-legend {
+    position: absolute;
+    top: var(--spacing-md);
+    right: calc(var(--spacing-md) + 150px);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    z-index: 10;
+  }
+  
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+  }
+  
+  .legend-color {
+    width: 20px;
+    height: 4px;
+    border-radius: 2px;
+  }
+  
+  .legend-color.working {
+    background: #00cc00;
+  }
+  
+  .legend-color.moving {
+    background: #cc0000;
+  }
+  
+  .legend-text {
+    font-size: 10px;
+    color: var(--text-secondary);
   }
 </style>
