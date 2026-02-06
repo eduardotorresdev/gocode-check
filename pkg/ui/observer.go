@@ -109,6 +109,30 @@ func (o *uiObserver) OnAssert(ctx assert.AssertContext) {
 		},
 	})
 
+	// Replay all events from the trace so the session has complete history
+	// This ensures events are visible even when a tab is opened manually
+	// after real-time events have already been sent
+	if ctx.Trace != nil {
+		state := interpreter.NewMachineState()
+		for i, event := range ctx.Trace.Events {
+			stateBefore := state.Clone()
+			// Update state based on event
+			state = applyEvent(state, event)
+			o.viewer.server.Broadcast(Message{
+				Type: "step",
+				Data: StepMessage{
+					Index:       i,
+					Total:       o.currentTotalSteps,
+					Instruction: nil, // Instruction not available in trace
+					Event:       event,
+					StateBefore: stateBefore,
+					StateAfter:  state,
+					HasError:    false,
+				},
+			})
+		}
+	}
+
 	// Broadcast each expectation and log to console
 	passed := 0
 	failed := 0
@@ -147,6 +171,49 @@ func (o *uiObserver) OnAssert(ctx assert.AssertContext) {
 			Failed:    failed,
 		},
 	})
+}
+
+// applyEvent updates the machine state based on an event
+func applyEvent(state *interpreter.MachineState, event interpreter.Event) *interpreter.MachineState {
+	newState := state.Clone()
+
+	// Update position for motion events
+	switch event.Type {
+	case interpreter.EventRapidMove, interpreter.EventLinearCut,
+		interpreter.EventArcCW, interpreter.EventArcCCW, interpreter.EventDrillCycle:
+		newState.Position = event.To
+	}
+
+	// Update spindle state
+	if event.Type == interpreter.EventSpindleStart {
+		newState.SpindleOn = true
+		newState.Spindle = event.Spindle
+		newState.SpindleCW = event.SpindleCW
+	} else if event.Type == interpreter.EventSpindleStop {
+		newState.SpindleOn = false
+	}
+
+	// Update tool
+	if event.Type == interpreter.EventToolChange && event.Tool > 0 {
+		newState.SetTool(event.Tool)
+	}
+
+	// Update feed rate for cutting moves
+	if event.Feed > 0 {
+		newState.Feed = event.Feed
+	}
+
+	// Update unit
+	if event.Type == interpreter.EventUnitChange {
+		newState.Unit = event.Unit
+	}
+
+	// Update mode
+	if event.Type == interpreter.EventModeChange {
+		newState.Mode = event.Mode
+	}
+
+	return newState
 }
 
 // formatInstruction converts an instruction to a readable string.
