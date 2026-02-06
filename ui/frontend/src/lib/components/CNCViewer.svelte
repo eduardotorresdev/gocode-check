@@ -35,6 +35,7 @@
     window.removeEventListener('resize', onResize);
     if (animationId) cancelAnimationFrame(animationId);
     if (controls) controls.dispose();
+    if (cutMaterial) cutMaterial.dispose();
     if (renderer) renderer.dispose();
   });
   
@@ -44,9 +45,10 @@
     scene.background = new THREE.Color(0x0a0a0f);
     
     // Camera - positioned to look at XY plane from above (Z is up)
+    // Camera is at (1500, -1500, 1500) - positive X, negative Y, positive Z
+    // This places the camera on the "front-left" corner looking at the origin
     const aspect = container.clientWidth / container.clientHeight;
     camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 10000);
-    // Position camera looking down at the workpiece from an angle
     camera.position.set(1500, -1500, 1500);
     camera.up.set(0, 0, 1); // Z is up
     camera.lookAt(0, 0, 0);
@@ -327,7 +329,9 @@
         } else if (p.type === 'DrillCycle') {
           createDrillHole(p);
         } else if (p.type === 'ArcCW' || p.type === 'ArcCCW') {
-          createLinearCutMark(prev, p); // Simplified arc as line for now
+          // TODO: Implement proper arc rendering with curved paths
+          // For now, render as a straight line between endpoints
+          createLinearCutMark(prev, p);
         }
       }
     }

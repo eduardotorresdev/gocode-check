@@ -65,11 +65,11 @@ export function connect(onMessage) {
       // Use exponential backoff with jitter
       if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
         connection.setReconnecting(true);
+        reconnectAttempts++;
         const delay = Math.min(
-          BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts) + Math.random() * 1000,
+          BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1) + Math.random() * 1000,
           MAX_RECONNECT_DELAY
         );
-        reconnectAttempts++;
         console.log(`[WS] Reconnecting in ${Math.round(delay)}ms (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
         reconnectTimeout = setTimeout(() => {
           createConnection();

@@ -136,7 +136,7 @@ export const sessions = {
   addEvent(event) {
     const session = this.receiving;
     if (session) {
-      session.events = [...session.events, event];
+      session.events.push(event);
       session.currentIndex = event.index;
     }
   },
@@ -145,7 +145,7 @@ export const sessions = {
   addExpectation(expectation) {
     const session = this.receiving;
     if (session) {
-      session.expectations = [...session.expectations, expectation];
+      session.expectations.push(expectation);
     }
   },
 
