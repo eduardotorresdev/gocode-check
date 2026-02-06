@@ -5,6 +5,8 @@ let activeSessionId = $state(null);
 let sessionIdCounter = $state(0);
 // Track which session is currently receiving events (the latest running session)
 let receivingSessionId = $state(null);
+// Track if user has manually changed the tab
+let userChangedTab = $state(false);
 
 // Create session structure
 function createSession(testName) {
@@ -120,16 +122,20 @@ export const sessions = {
     sessionList.push(session);
     // New session becomes the receiving session
     receivingSessionId = session.id;
-    // Also make it active (switch to new tab)
-    activeSessionId = session.id;
+    // Only switch to new tab if user hasn't manually changed tabs
+    if (!userChangedTab) {
+      activeSessionId = session.id;
+    }
     return session.id;
   },
 
-  // Select active session (for viewing)
+  // Select active session (for viewing) - marks as manual change
   setActive(sessionId) {
     const session = sessionList.find(s => s.id === sessionId);
     if (session) {
       activeSessionId = sessionId;
+      // Mark that user manually changed the tab
+      userChangedTab = true;
       // When switching tabs, restore the machine state from that session's last event
       // This ensures the viewer shows the correct state for the selected session
       if (session.events.length > 0 && session.currentIndex >= 0) {
@@ -227,6 +233,7 @@ export const sessions = {
     activeSessionId = null;
     receivingSessionId = null;
     sessionIdCounter = 0;
+    userChangedTab = false;
   },
 
   // Remove specific session

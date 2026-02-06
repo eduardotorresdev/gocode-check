@@ -17,17 +17,17 @@
     }
   }
   
-  function getEventGCode(type) {
+  function getEventDescription(type) {
     switch (type) {
-      case 'RapidMove': return 'G0';
-      case 'LinearCut': return 'G1';
-      case 'ArcCW': return 'G2';
-      case 'ArcCCW': return 'G3';
-      case 'SpindleStart': return 'M3/M4';
-      case 'SpindleStop': return 'M5';
-      case 'ToolChange': return 'T';
-      case 'DrillCycle': return 'G81-89';
-      default: return '';
+      case 'RapidMove': return 'Rapid positioning';
+      case 'LinearCut': return 'Linear cutting';
+      case 'ArcCW': return 'Clockwise arc';
+      case 'ArcCCW': return 'Counter-clockwise arc';
+      case 'SpindleStart': return 'Spindle on';
+      case 'SpindleStop': return 'Spindle off';
+      case 'ToolChange': return 'Tool change';
+      case 'DrillCycle': return 'Drill cycle';
+      default: return 'Unknown';
     }
   }
 
@@ -56,12 +56,11 @@
             class="event-type-badge"
             style="background: {getEventColor(event.event?.Type)}; color: white;"
           >
-            {event.event?.Type ?? 'Unknown'}
+            {getEventDescription(event.event?.Type)}
           </div>
-          <div class="event-gcode">{getEventGCode(event.event?.Type)}</div>
-        </div>
-        <div class="event-instruction">
-          <code>{event.instruction?.RawLine ?? '-'}</code>
+          <div class="event-instruction">
+            <code>{event.instruction?.RawLine ?? '-'}</code>
+          </div>
         </div>
         {#if event.hasError}
           <span class="error-badge">Error</span>
@@ -160,9 +159,9 @@
   .event-info {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    width: 85px;
-    flex-shrink: 0;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
   }
   
   .event-type-badge {
@@ -170,27 +169,19 @@
     font-weight: 600;
     padding: 2px 6px;
     border-radius: var(--radius-sm);
-    text-align: center;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-  
-  .event-gcode {
-    font-size: 9px;
-    font-family: var(--font-mono);
-    color: var(--text-muted);
-    text-align: center;
+    width: fit-content;
   }
   
   .event-instruction {
-    flex: 1;
     overflow: hidden;
   }
   
   .event-instruction code {
-    font-size: 10px;
-    color: var(--text-secondary);
+    font-size: 9px;
+    color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

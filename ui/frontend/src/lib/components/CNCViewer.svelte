@@ -167,7 +167,7 @@
     collet.position.z = 15;
     holderGroup.add(collet);
     
-    // Milling bit (the cutter)
+    // Milling bit (the cutter) - textured cylinder
     const bitGroup = new THREE.Group();
     
     // Shank
@@ -181,21 +181,55 @@
     shank.position.z = -10;
     bitGroup.add(shank);
     
-    // Cutting flutes (spiral pattern approximation)
-    const fluteGeometry = new THREE.CylinderGeometry(4, 8, 25, 4);
-    const fluteMaterial = new THREE.MeshStandardMaterial({
+    // Textured cutting cylinder with spiral flutes
+    const fluteRadius = 8;
+    const fluteHeight = 25;
+    const numFlutes = 4;
+    
+    // Create main cutting body as a cylinder
+    const cuttingGeometry = new THREE.CylinderGeometry(fluteRadius, fluteRadius, fluteHeight, 32);
+    const cuttingMaterial = new THREE.MeshStandardMaterial({
       color: 0x00ff88,
       metalness: 0.7,
-      roughness: 0.2,
-      emissive: 0x004422,
+      roughness: 0.3,
+      emissive: 0x002211,
     });
-    const flutes = new THREE.Mesh(fluteGeometry, fluteMaterial);
-    flutes.position.z = -35;
-    bitGroup.add(flutes);
+    const cuttingBody = new THREE.Mesh(cuttingGeometry, cuttingMaterial);
+    cuttingBody.position.z = -35;
+    bitGroup.add(cuttingBody);
+    
+    // Add visible flute grooves (dark stripes around the cylinder)
+    for (let i = 0; i < numFlutes; i++) {
+      const angle = (i / numFlutes) * Math.PI * 2;
+      const grooveGeometry = new THREE.BoxGeometry(2, fluteHeight, fluteRadius * 0.3);
+      const grooveMaterial = new THREE.MeshStandardMaterial({
+        color: 0x004422,
+        metalness: 0.6,
+        roughness: 0.4,
+      });
+      const groove = new THREE.Mesh(grooveGeometry, grooveMaterial);
+      // Position groove on cylinder surface
+      groove.position.set(fluteRadius * 0.85, 0, 0);
+      
+      // Create a pivot group to rotate the groove around the cylinder
+      const groovePivot = new THREE.Group();
+      groovePivot.add(groove);
+      groovePivot.position.z = -35;
+      groovePivot.rotation.x = Math.PI / 2;
+      groovePivot.rotation.z = angle;
+      
+      bitGroup.add(groovePivot);
+    }
     
     // Tip
-    const tipGeometry = new THREE.ConeGeometry(8, 10, 8);
-    const tip = new THREE.Mesh(tipGeometry, fluteMaterial);
+    const tipGeometry = new THREE.ConeGeometry(fluteRadius, 10, 8);
+    const tipMaterial = new THREE.MeshStandardMaterial({
+      color: 0x00ff88,
+      metalness: 0.7,
+      roughness: 0.3,
+      emissive: 0x002211,
+    });
+    const tip = new THREE.Mesh(tipGeometry, tipMaterial);
     tip.rotation.x = Math.PI; // Point down
     tip.position.z = -52;
     bitGroup.add(tip);
@@ -292,8 +326,8 @@
       return;
     }
     
-    // Only update if path changed
-    if (path.length === lastToolPathLength && toolPathWorking && toolPathMoving) {
+    // Only update if path changed - check if any path exists to update
+    if (path.length === lastToolPathLength) {
       return;
     }
     
@@ -302,11 +336,13 @@
       scene.remove(toolPathWorking);
       toolPathWorking.geometry.dispose();
       toolPathWorking.material.dispose();
+      toolPathWorking = null;
     }
     if (toolPathMoving) {
       scene.remove(toolPathMoving);
       toolPathMoving.geometry.dispose();
       toolPathMoving.material.dispose();
+      toolPathMoving = null;
     }
     
     // Separate points for working and moving paths
@@ -333,16 +369,16 @@
       }
     }
     
-    // Create working path (green)
+    // Create working path (green) - separate line object
     if (workingSegments.length > 0) {
       const workingPoints = [];
       const workingColors = [];
       for (const seg of workingSegments) {
         workingPoints.push(...seg.points);
-        const brightness = seg.isPast ? 1.0 : 0.3;
-        // Green color
-        workingColors.push(0 * brightness, 0.8 * brightness, 0 * brightness);
-        workingColors.push(0 * brightness, 0.8 * brightness, 0 * brightness);
+        const greenIntensity = 0.8 * (seg.isPast ? 1.0 : 0.3);
+        // Add green color for both start and end points of segment
+        workingColors.push(0, greenIntensity, 0);
+        workingColors.push(0, greenIntensity, 0);
       }
       
       const workingGeometry = new THREE.BufferGeometry().setFromPoints(workingPoints);
@@ -357,16 +393,16 @@
       scene.add(toolPathWorking);
     }
     
-    // Create moving path (red)
+    // Create moving path (red) - separate line object
     if (movingSegments.length > 0) {
       const movingPoints = [];
       const movingColors = [];
       for (const seg of movingSegments) {
         movingPoints.push(...seg.points);
-        const brightness = seg.isPast ? 1.0 : 0.3;
-        // Red color
-        movingColors.push(0.8 * brightness, 0 * brightness, 0 * brightness);
-        movingColors.push(0.8 * brightness, 0 * brightness, 0 * brightness);
+        const redIntensity = 0.8 * (seg.isPast ? 1.0 : 0.3);
+        // Add red color for both start and end points of segment
+        movingColors.push(redIntensity, 0, 0);
+        movingColors.push(redIntensity, 0, 0);
       }
       
       const movingGeometry = new THREE.BufferGeometry().setFromPoints(movingPoints);
