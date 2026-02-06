@@ -75,9 +75,10 @@ ui-dev:
 
 ## ui-build: Build frontend for production
 ui-build:
-	cd ui/frontend && npm run build
+	cd ui/frontend && npm install && npm run build
 	rm -rf pkg/ui/static/*
 	cp -r ui/frontend/dist/* pkg/ui/static/
+	@echo "✓ Frontend built and copied to pkg/ui/static/"
 
 ## ui-test: Run tests with UI enabled
 ui-test:
