@@ -5,15 +5,29 @@
   
   function getEventColor(type) {
     switch (type) {
-      case 'RapidMove': return 'var(--text-muted)';
+      case 'RapidMove': return 'var(--accent-red)';
       case 'LinearCut': return 'var(--accent-green)';
       case 'ArcCW':
       case 'ArcCCW': return 'var(--accent-cyan)';
       case 'SpindleStart': return 'var(--accent-yellow)';
-      case 'SpindleStop': return 'var(--accent-red)';
+      case 'SpindleStop': return 'var(--accent-orange, #ff8800)';
       case 'ToolChange': return 'var(--accent-purple)';
-      case 'DrillCycle': return 'var(--accent-orange, #ff8800)';
+      case 'DrillCycle': return 'var(--accent-blue)';
       default: return 'var(--text-secondary)';
+    }
+  }
+  
+  function getEventGCode(type) {
+    switch (type) {
+      case 'RapidMove': return 'G0';
+      case 'LinearCut': return 'G1';
+      case 'ArcCW': return 'G2';
+      case 'ArcCCW': return 'G3';
+      case 'SpindleStart': return 'M3/M4';
+      case 'SpindleStop': return 'M5';
+      case 'ToolChange': return 'T';
+      case 'DrillCycle': return 'G81';
+      default: return '';
     }
   }
 
@@ -37,11 +51,14 @@
         onclick={() => handleClick(event.index)}
       >
         <div class="event-index">{event.index}</div>
-        <div 
-          class="event-type"
-          style="color: {getEventColor(event.event?.Type)}"
-        >
-          {event.event?.Type ?? 'Unknown'}
+        <div class="event-info">
+          <div 
+            class="event-type-badge"
+            style="background: {getEventColor(event.event?.Type)}; color: white;"
+          >
+            {event.event?.Type ?? 'Unknown'}
+          </div>
+          <div class="event-gcode">{getEventGCode(event.event?.Type)}</div>
         </div>
         <div class="event-instruction">
           <code>{event.instruction?.RawLine ?? '-'}</code>
@@ -104,9 +121,9 @@
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
-    padding: var(--spacing-xs) var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-sm);
     border-radius: var(--radius-sm);
-    margin-bottom: 2px;
+    margin-bottom: 4px;
     font-size: 11px;
     opacity: 0.5;
     transition: var(--transition-fast);
@@ -125,7 +142,7 @@
   .event-item.current {
     background: var(--bg-hover);
     opacity: 1;
-    border-left: 2px solid var(--accent-cyan);
+    border-left: 3px solid var(--accent-cyan);
   }
   
   .event-item.past {
@@ -133,16 +150,37 @@
   }
   
   .event-index {
-    width: 28px;
+    width: 24px;
     font-family: var(--font-mono);
     color: var(--text-muted);
     text-align: right;
+    flex-shrink: 0;
   }
   
-  .event-type {
-    width: 80px;
-    font-weight: 500;
+  .event-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 85px;
+    flex-shrink: 0;
+  }
+  
+  .event-type-badge {
     font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .event-gcode {
+    font-size: 9px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    text-align: center;
   }
   
   .event-instruction {
@@ -166,6 +204,7 @@
     color: white;
     border-radius: 2px;
     font-weight: 600;
+    flex-shrink: 0;
   }
   
   .empty {

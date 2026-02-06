@@ -115,6 +115,9 @@ func Enable(cfg Config) func() {
 			// Cancel context (stops server)
 			cancel()
 
+			// Clear browser lock file
+			ClearBrowserLock()
+
 			logger.Success("UI server stopped.")
 
 			globalViewer = nil
