@@ -117,7 +117,7 @@ func Enable(cfg Config) func() {
 			// In production use, the server keeps running after tests complete
 			// so users can view results even after closing/reopening the browser
 			logger.Info("UI server will continue running...")
-			logger.Info("You can close the browser and reopen it at %s to view the results.", globalViewer.server.URL())
+			logger.Info("You can view the results at %s even after closing and reopening the browser.", globalViewer.server.URL())
 			logger.Info("Press Ctrl+C to stop the server when you're done.")
 
 			// Note: We don't cancel context or clear globalViewer here to keep server alive

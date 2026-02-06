@@ -46,7 +46,8 @@
   }
 
   function formatValue(val) {
-    if (val === null || val === undefined) return 'none';
+    if (val === null) return 'null';
+    if (val === undefined) return 'undefined';
     if (typeof val === 'object') {
       // Try to format objects nicely
       if (Array.isArray(val)) return `${val.length} items`;

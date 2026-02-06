@@ -13,6 +13,9 @@ let receivingSessionId = $state(null);
 let userChangedTab = $state(false);
 
 // Save to localStorage whenever state changes
+// Note: For test scenarios with moderate update frequency, synchronous localStorage writes
+// are acceptable. If performance becomes an issue with very high-frequency updates,
+// consider debouncing this function.
 function saveToStorage() {
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem('gocode-check-sessions', JSON.stringify({
