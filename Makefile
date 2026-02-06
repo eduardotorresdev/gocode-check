@@ -1,4 +1,4 @@
-.PHONY: fmt lint test snapshot release build clean help ui-install ui-dev ui-build ui-test test-ui-package
+.PHONY: fmt lint test snapshot release build clean help ui-install ui-dev ui-build ui-test test-ui-package examples examples-ui
 
 # Default target
 .DEFAULT_GOAL := help
@@ -87,6 +87,16 @@ ui-test:
 ## test-ui-package: Run UI package tests
 test-ui-package:
 	$(GOTEST) -v ./pkg/ui/...
+
+## examples: Run example tests
+examples:
+	@echo "Running examples..."
+	$(GOTEST) -v ./examples/...
+
+## examples-ui: Run examples with UI visualization
+examples-ui:
+	@echo "Running examples with UI visualization..."
+	GOCODECHECK_UI=1 $(GOTEST) -v -p 1 ./examples/...
 
 ## help: Show this help message
 help:
