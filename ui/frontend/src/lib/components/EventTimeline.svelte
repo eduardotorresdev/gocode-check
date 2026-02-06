@@ -1,6 +1,8 @@
 <script>
   import { events } from '../state/events.svelte.js';
   
+  let { onEventClick = () => {} } = $props();
+  
   function getEventColor(type) {
     switch (type) {
       case 'RapidMove': return 'var(--text-muted)';
@@ -13,6 +15,10 @@
       default: return 'var(--text-secondary)';
     }
   }
+
+  function handleClick(index) {
+    onEventClick(index);
+  }
 </script>
 
 <div class="event-timeline">
@@ -23,10 +29,11 @@
   
   <div class="timeline-list">
     {#each events.list as event, i}
-      <div 
+      <button 
         class="event-item"
         class:current={i === events.currentIndex}
         class:past={i < events.currentIndex}
+        onclick={() => handleClick(event.index)}
       >
         <div class="event-index">{event.index}</div>
         <div 
@@ -41,7 +48,7 @@
         {#if event.hasError}
           <span class="error-badge">Error</span>
         {/if}
-      </div>
+      </button>
     {:else}
       <div class="empty">
         Waiting for events...
@@ -98,6 +105,16 @@
     font-size: 11px;
     opacity: 0.5;
     transition: var(--transition-fast);
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .event-item:hover {
+    background: var(--bg-hover);
+    opacity: 1;
   }
   
   .event-item.current {

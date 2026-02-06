@@ -20,6 +20,7 @@ type Viewer struct {
 	server   *Server
 	logger   *Logger
 	observer *uiObserver
+	flow     *FlowController
 	ctx      context.Context
 	cancel   context.CancelFunc
 }
@@ -47,16 +48,18 @@ func Enable(cfg Config) func() {
 		ctx, cancel := context.WithCancel(context.Background())
 
 		logger := NewLogger(cfg.Verbose)
+		flowController := NewFlowController()
 
 		globalViewer = &Viewer{
 			config: cfg,
 			logger: logger,
+			flow:   flowController,
 			ctx:    ctx,
 			cancel: cancel,
 		}
 
 		// Create and start server
-		globalViewer.server = NewServer(cfg.Port, logger)
+		globalViewer.server = NewServer(cfg.Port, logger, flowController)
 
 		url, err := globalViewer.server.Start(ctx)
 		if err != nil {

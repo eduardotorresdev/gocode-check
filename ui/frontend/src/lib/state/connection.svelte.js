@@ -1,5 +1,5 @@
-// Estado reativo global usando Svelte 5 Runes
-// Arquivo .svelte.js permite usar runes fora de componentes
+// Global reactive state using Svelte 5 Runes
+// .svelte.js files allow using runes outside components
 
 let connectionState = $state({
   connected: false,
@@ -7,7 +7,7 @@ let connectionState = $state({
   reconnecting: false,
 });
 
-// Exportar getters e setters
+// Export getters and setters
 export const connection = {
   get connected() { return connectionState.connected; },
   get error() { return connectionState.error; },

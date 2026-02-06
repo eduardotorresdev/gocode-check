@@ -1,20 +1,24 @@
 <script>
   import { send } from '../state/connection.svelte.js';
-  
-  let { speed = 'normal' } = $props();
-  let paused = $state(false);
+  import { flow } from '../state/flow.svelte.js';
   
   function setSpeed(newSpeed) {
-    speed = newSpeed;
+    flow.setSpeed(newSpeed);
     send({ type: 'set_speed', data: newSpeed });
   }
   
   function togglePause() {
-    paused = !paused;
-    send({ type: paused ? 'pause' : 'resume' });
+    if (flow.isPaused) {
+      flow.resume();
+      send({ type: 'resume' });
+    } else {
+      flow.pause();
+      send({ type: 'pause' });
+    }
   }
   
   function step() {
+    flow.step();
     send({ type: 'step' });
   }
 </script>
@@ -24,30 +28,40 @@
     <span class="label">Speed:</span>
     <button 
       class="speed-btn"
-      class:active={speed === 'fast'}
+      class:active={flow.speed === 'fast'}
       onclick={() => setSpeed('fast')}
     >
       Fast
     </button>
     <button 
       class="speed-btn"
-      class:active={speed === 'normal'}
+      class:active={flow.speed === 'normal'}
       onclick={() => setSpeed('normal')}
     >
       Normal
     </button>
     <button 
       class="speed-btn"
-      class:active={speed === 'slow'}
+      class:active={flow.speed === 'slow'}
       onclick={() => setSpeed('slow')}
     >
       Slow
     </button>
   </div>
   
+  <div class="flow-status">
+    {#if flow.isPaused}
+      <span class="status paused">⏸ Paused</span>
+    {:else if flow.isStepping}
+      <span class="status stepping">⏭ Stepping</span>
+    {:else}
+      <span class="status playing">▶ Playing</span>
+    {/if}
+  </div>
+  
   <div class="playback-controls">
     <button class="control-btn" onclick={togglePause}>
-      {#if paused}
+      {#if flow.isPaused}
         <span class="icon">▶</span> Resume
       {:else}
         <span class="icon">⏸</span> Pause
@@ -119,5 +133,32 @@
   
   .icon {
     font-size: 10px;
+  }
+
+  .flow-status {
+    display: flex;
+    align-items: center;
+  }
+
+  .status {
+    font-size: 11px;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+  }
+
+  .status.playing {
+    background: var(--accent-green);
+    color: var(--bg-primary);
+  }
+
+  .status.paused {
+    background: var(--accent-yellow);
+    color: var(--bg-primary);
+  }
+
+  .status.stepping {
+    background: var(--accent-cyan);
+    color: var(--bg-primary);
   }
 </style>

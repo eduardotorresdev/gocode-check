@@ -40,6 +40,7 @@ type Server struct {
 	broadcast  chan Message
 	httpServer *http.Server
 	url        string
+	flow       *FlowController
 
 	// Connection synchronization
 	connected     chan struct{}
@@ -47,10 +48,11 @@ type Server struct {
 }
 
 // NewServer creates a new UI server.
-func NewServer(port int, logger *Logger) *Server {
+func NewServer(port int, logger *Logger, flow *FlowController) *Server {
 	return &Server{
 		port:      port,
 		logger:    logger,
+		flow:      flow,
 		clients:   make(map[*client]bool),
 		broadcast: make(chan Message, 256),
 		connected: make(chan struct{}),
@@ -262,10 +264,46 @@ func (s *Server) handleClientCommand(cmd Message) {
 		s.logger.Debug("Speed change requested: %v", cmd.Data)
 	case "pause":
 		s.logger.Debug("Pause requested")
+		if s.flow != nil {
+			s.flow.Pause()
+			s.Broadcast(Message{
+				Type: "flow_state",
+				Data: map[string]interface{}{
+					"state": "paused",
+				},
+			})
+		}
 	case "resume":
 		s.logger.Debug("Resume requested")
+		if s.flow != nil {
+			s.flow.Resume()
+			s.Broadcast(Message{
+				Type: "flow_state",
+				Data: map[string]interface{}{
+					"state": "playing",
+				},
+			})
+		}
 	case "step":
 		s.logger.Debug("Step requested")
+		if s.flow != nil {
+			s.flow.Step()
+			s.Broadcast(Message{
+				Type: "flow_state",
+				Data: map[string]interface{}{
+					"state": "stepping",
+				},
+			})
+		}
+	case "jump_to":
+		if data, ok := cmd.Data.(map[string]interface{}); ok {
+			if index, ok := data["index"].(float64); ok {
+				s.logger.Debug("Jump to index requested: %d", int(index))
+				if s.flow != nil {
+					s.flow.JumpTo(int(index))
+				}
+			}
+		}
 	}
 }
 
