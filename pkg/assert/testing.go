@@ -64,7 +64,12 @@ func (a *Assertion) Must(t TestingT) *Assertion {
 
 // buildValidationResults converts the current assertion state to ValidationResults.
 func (a *Assertion) buildValidationResults() []ValidationResult {
-	results := make([]ValidationResult, 0)
+	// Preallocate with expected capacity
+	capacity := 1
+	if !a.passed && len(a.errors) > 0 {
+		capacity = len(a.errors)
+	}
+	results := make([]ValidationResult, 0, capacity)
 
 	if a.passed {
 		// Single passed result if everything passed

@@ -206,6 +206,11 @@ G1 Z-10 F100`
 		t.Fatal("expected last event to be non-nil")
 	}
 
+	// Verify TestName is captured from t.Name()
+	if last.TestName != t.Name() {
+		t.Errorf("expected TestName '%s', got '%s'", t.Name(), last.TestName)
+	}
+
 	if !last.AllPassed {
 		t.Error("expected AllPassed to be true")
 	}
