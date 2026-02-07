@@ -62,9 +62,6 @@
           >
             {getEventDescription(event.event?.Type)}
           </div>
-          <div class="event-operation-name">
-            {event.event?.Type ?? 'unknown'}
-          </div>
           {#if event.instruction?.RawLine}
             <div class="event-instruction">
               <code>{event.instruction.RawLine}</code>

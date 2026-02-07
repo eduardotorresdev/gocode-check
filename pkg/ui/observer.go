@@ -34,10 +34,8 @@ func (o *uiObserver) OnInterpretStart(event interpreter.InterpretStartEvent) {
 
 // OnStep handles each execution step.
 func (o *uiObserver) OnStep(event interpreter.StepEvent) {
-	// Check flow control - wait if paused or stepping
-	if o.viewer.flow != nil {
-		o.viewer.flow.WaitForContinue(event.Index)
-	}
+	// Go emits events continuously - no flow control blocking
+	// Frontend controls only visualization, not emission
 
 	// Broadcast to UI
 	o.viewer.server.Broadcast(Message{
@@ -60,8 +58,9 @@ func (o *uiObserver) OnStep(event interpreter.StepEvent) {
 		formatInstruction(event.Instruction),
 	)
 
-	// Apply delay for human-readable visualization (only when playing)
-	if o.viewer.config.Speed != SpeedManual && o.viewer.flow != nil && o.viewer.flow.State() == FlowPlaying {
+	// Apply delay for human-readable visualization
+	// Speed is still controlled by config, not by FlowController
+	if o.viewer.config.Speed != SpeedManual {
 		delay := SpeedToDuration(o.viewer.config.Speed)
 		time.Sleep(delay)
 	}

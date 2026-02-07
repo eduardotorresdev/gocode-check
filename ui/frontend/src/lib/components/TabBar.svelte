@@ -1,8 +1,10 @@
 <script>
   import { sessions } from '../state/sessions.svelte.js';
 
+  let { onTabSwitch = () => {} } = $props();
+
   function selectSession(id) {
-    sessions.setActive(id);
+    onTabSwitch(id);
   }
 
   function closeSession(e, id) {

@@ -28,9 +28,11 @@ type FlowController struct {
 }
 
 // NewFlowController creates a new flow controller.
+// Note: FlowController is now only used for tracking state, not for blocking.
+// Go emits events continuously regardless of flow state.
 func NewFlowController() *FlowController {
 	return &FlowController{
-		state:        FlowPlaying,
+		state:        FlowPlaying, // Start playing - Go emits continuously
 		stepSignal:   make(chan struct{}, 1),
 		currentIndex: 0,
 		targetIndex:  -1,

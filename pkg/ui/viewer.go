@@ -61,6 +61,29 @@ func Enable(cfg Config) func() {
 		// Create and start server
 		globalViewer.server = NewServer(cfg.Port, logger, flowController)
 
+		// Set up callback to shut down server when all browsers disconnect
+		globalViewer.server.onAllClientsDisconnected = func() {
+			mu.Lock()
+			defer mu.Unlock()
+
+			if globalViewer == nil {
+				return
+			}
+
+			logger.Info("Shutting down UI server...")
+
+			// Cancel context (stops server)
+			cancel()
+
+			// Clear browser lock file
+			ClearBrowserLock()
+
+			logger.Success("UI server stopped.")
+
+			globalViewer = nil
+			once = sync.Once{}
+		}
+
 		url, err := globalViewer.server.Start(ctx)
 		if err != nil {
 			logger.Error("Failed to start server: %v", err)
@@ -106,26 +129,31 @@ func Enable(cfg Config) func() {
 				return
 			}
 
-			logger.Info("Shutting down UI server...")
-
-			// Unregister observers
+			// Unregister observers (stop capturing new events)
 			interpreter.UnregisterObserver(globalViewer.observer)
 			assert.UnregisterObserver(globalViewer.observer)
 
-			// Cancel context (stops server)
-			cancel()
+			// Check if any browser was connected
+			if globalViewer.server.ClientCount() == 0 {
+				// No browser connected - shut down immediately like headless mode
+				logger.Info("No browser connected. Shutting down UI server...")
 
-			// Clear browser lock file
-			ClearBrowserLock()
+				// Cancel context (stops server)
+				cancel()
 
-			logger.Success("UI server stopped.")
+				// Clear browser lock file
+				ClearBrowserLock()
 
-			globalViewer = nil
-			// Reset once for potential re-enable.
-			// Note: This reset is protected by mu.Lock() above, making it safe
-			// for sequential test execution. In production, Enable() is typically
-			// called only once in TestMain, so this reset is primarily for testing.
-			once = sync.Once{}
+				logger.Success("UI server stopped.")
+
+				globalViewer = nil
+				once = sync.Once{}
+			} else {
+				// Browser is connected - keep server running until browser disconnects
+				logger.Info("Tests completed. Server will remain active while browser is connected...")
+				logger.Info("Close the browser to shut down the server.")
+				// Server will shut down when browser disconnects (see onAllClientsDisconnected callback)
+			}
 		}
 	})
 
