@@ -1,30 +1,12 @@
 // Test session state (tabs)
 
-// Try to restore from localStorage on initial load
-const savedData = typeof localStorage !== 'undefined' ? localStorage.getItem('gocode-check-sessions') : null;
-const restored = savedData ? JSON.parse(savedData) : { sessions: [], activeId: null, counter: 0 };
-
-let sessionList = $state(restored.sessions || []);
-let activeSessionId = $state(restored.activeId || null);
-let sessionIdCounter = $state(restored.counter || 0);
+let sessionList = $state([]);
+let activeSessionId = $state(null);
+let sessionIdCounter = $state(0);
 // Track which session is currently receiving events (the latest running session)
 let receivingSessionId = $state(null);
 // Track if user has manually changed the tab
 let userChangedTab = $state(false);
-
-// Save to localStorage whenever state changes
-// Note: For test scenarios with moderate update frequency, synchronous localStorage writes
-// are acceptable. If performance becomes an issue with very high-frequency updates,
-// consider debouncing this function.
-function saveToStorage() {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('gocode-check-sessions', JSON.stringify({
-      sessions: sessionList,
-      activeId: activeSessionId,
-      counter: sessionIdCounter,
-    }));
-  }
-}
 
 // Create session structure
 function createSession(testName) {
@@ -144,7 +126,6 @@ export const sessions = {
     if (!userChangedTab) {
       activeSessionId = session.id;
     }
-    saveToStorage();
     return session.id;
   },
 
@@ -174,7 +155,6 @@ export const sessions = {
           session.machine = newMachine;
         }
       }
-      saveToStorage();
     }
   },
 
@@ -184,7 +164,6 @@ export const sessions = {
     if (session) {
       session.events.push(event);
       session.currentIndex = event.index;
-      saveToStorage();
     }
   },
 
@@ -193,7 +172,6 @@ export const sessions = {
     const session = this.receiving;
     if (session) {
       session.expectations.push(expectation);
-      saveToStorage();
     }
   },
 
@@ -213,7 +191,6 @@ export const sessions = {
       if (newState.SpindleOn !== undefined) newMachine.spindleOn = newState.SpindleOn;
       if (newState.SpindleCW !== undefined) newMachine.spindleCW = newState.SpindleCW;
       session.machine = newMachine;
-      saveToStorage();
     }
   },
 
@@ -223,7 +200,6 @@ export const sessions = {
     if (session) {
       session.running = false;
       session.allPassed = allPassed;
-      saveToStorage();
     }
   },
 
@@ -248,7 +224,6 @@ export const sessions = {
         if (event.stateAfter.SpindleCW !== undefined) newMachine.spindleCW = event.stateAfter.SpindleCW;
         session.machine = newMachine;
       }
-      saveToStorage();
     }
   },
 
@@ -259,7 +234,6 @@ export const sessions = {
     receivingSessionId = null;
     sessionIdCounter = 0;
     userChangedTab = false;
-    saveToStorage();
   },
 
   // Remove specific session
@@ -275,7 +249,6 @@ export const sessions = {
         const nextRunning = sessionList.find(s => s.running);
         receivingSessionId = nextRunning?.id || null;
       }
-      saveToStorage();
     }
   },
 };

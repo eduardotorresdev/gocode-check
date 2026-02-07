@@ -26,9 +26,6 @@ func TestEnableDisable(t *testing.T) {
 
 	cleanup()
 
-	// Server continues running after cleanup - need to call Shutdown() for tests
-	Shutdown()
-
 	// Give cleanup time to complete
 	time.Sleep(100 * time.Millisecond)
 
@@ -53,9 +50,6 @@ func TestEnableWithEnvVar(t *testing.T) {
 		t.Error("expected UI to be enabled")
 	}
 	cleanup()
-
-	// For tests, we need to fully shutdown
-	Shutdown()
 
 	// Wait for cleanup
 	time.Sleep(100 * time.Millisecond)
@@ -82,18 +76,12 @@ func TestDoubleEnable(t *testing.T) {
 		t.Error("expected UI to still be enabled after no-op cleanup2")
 	}
 
-	// cleanup1 unregisters observers but keeps server running
+	// cleanup1 should actually disable
 	cleanup1()
-	if !Enabled() {
-		t.Error("expected UI to still be enabled (server still running)")
-	}
-
-	// For tests, fully shutdown
-	Shutdown()
 
 	time.Sleep(100 * time.Millisecond)
 
 	if Enabled() {
-		t.Error("expected UI to be disabled after Shutdown()")
+		t.Error("expected UI to be disabled after cleanup1")
 	}
 }
