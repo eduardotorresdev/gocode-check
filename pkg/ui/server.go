@@ -45,6 +45,9 @@ type Server struct {
 	// Connection synchronization
 	connected     chan struct{}
 	connectedOnce sync.Once
+
+	// Shutdown callback - called when last client disconnects
+	onAllClientsDisconnected func()
 }
 
 // NewServer creates a new UI server.
@@ -237,6 +240,12 @@ func (s *Server) readFromClient(c *client) {
 
 		s.logger.ConnectionStatus(false, clientCount)
 		c.conn.Close()
+
+		// If all clients have disconnected and we have a shutdown callback, call it
+		if clientCount == 0 && s.onAllClientsDisconnected != nil {
+			s.logger.Info("All browsers disconnected. Shutting down server...")
+			go s.onAllClientsDisconnected()
+		}
 	}()
 
 	for {
