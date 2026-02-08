@@ -74,9 +74,23 @@
   }
 
   function handleEventClick(index) {
+    // Clicking on an event while playing should pause the view
+    if (flow.isPlaying) {
+      flow.pause();
+      send({ type: 'pause' });
+    }
     // Jump to specific event in the ACTIVE session
     send({ type: 'jump_to', data: { index } });
     sessions.setCurrentIndex(index);
+  }
+
+  function handleTabSwitch(sessionId) {
+    // Switching to a different tab should pause the view
+    if (sessions.activeId !== sessionId && flow.isPlaying) {
+      flow.pause();
+      send({ type: 'pause' });
+    }
+    sessions.setActive(sessionId);
   }
 </script>
 
@@ -84,7 +98,7 @@
   <Header />
   
   {#if sessions.count > 0}
-    <TabBar />
+    <TabBar onTabSwitch={handleTabSwitch} />
   {/if}
   
   <div class="main-content">

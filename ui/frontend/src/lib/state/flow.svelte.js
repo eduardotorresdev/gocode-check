@@ -1,7 +1,9 @@
 // Flow control state (play/pause/step)
+// Note: This controls only the VIEW, not Go execution
+// Go emits events continuously regardless of this state
 
 let flowState = $state({
-  state: 'playing', // 'playing' | 'paused' | 'stepping'
+  state: 'playing', // 'playing' | 'paused' | 'stepping' - Controls view only
   speed: 'normal',  // 'fast' | 'normal' | 'slow'
 });
 
