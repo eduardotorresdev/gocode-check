@@ -531,6 +531,146 @@ func (a *Assertion) NoOperationOutside(bounds Bounds) *Assertion {
 	return a
 }
 
+// --- Stock-based Hole Assertions ---
+
+// IsPassThrough asserts that the filtered holes are pass-through holes.
+// A pass-through hole goes completely through the stock.
+// Requires a stock to be defined in the model.
+func (a *Assertion) IsPassThrough() *Assertion {
+	if a.filteredHoles == nil {
+		a.addError("IsPassThrough must be called after HasHole")
+		return a
+	}
+
+	if a.model.Stock == nil {
+		a.addError("IsPassThrough requires a stock to be defined (use model.WithStock)")
+		return a
+	}
+
+	a.context += ".IsPassThrough()"
+
+	stock := a.model.Stock
+	var filtered []machining.Hole
+	for _, h := range a.filteredHoles {
+		if stock.IsPassThrough(h.TopZ, h.BottomZ, a.tolerance) {
+			filtered = append(filtered, h)
+		}
+	}
+
+	if len(filtered) == 0 {
+		a.addError("no pass-through holes found (stock depth=%.4f)", stock.Depth)
+		if len(a.filteredHoles) > 0 {
+			a.errors[len(a.errors)-1] += "\n  Hole depths:"
+			for _, h := range a.filteredHoles {
+				a.errors[len(a.errors)-1] += fmt.Sprintf(" %.4f", h.Depth)
+			}
+		}
+	}
+
+	a.filteredHoles = filtered
+	return a
+}
+
+// IsBlindHole asserts that the filtered holes are blind holes (not pass-through).
+// A blind hole does not go completely through the stock.
+// Requires a stock to be defined in the model.
+func (a *Assertion) IsBlindHole() *Assertion {
+	if a.filteredHoles == nil {
+		a.addError("IsBlindHole must be called after HasHole")
+		return a
+	}
+
+	if a.model.Stock == nil {
+		a.addError("IsBlindHole requires a stock to be defined (use model.WithStock)")
+		return a
+	}
+
+	a.context += ".IsBlindHole()"
+
+	stock := a.model.Stock
+	var filtered []machining.Hole
+	for _, h := range a.filteredHoles {
+		if !stock.IsPassThrough(h.TopZ, h.BottomZ, a.tolerance) {
+			filtered = append(filtered, h)
+		}
+	}
+
+	if len(filtered) == 0 {
+		a.addError("no blind holes found (all holes are pass-through)")
+	}
+
+	a.filteredHoles = filtered
+	return a
+}
+
+// WithinStock asserts that all operations are within the stock bounds.
+// This validates that no machining operation exceeds the workpiece dimensions.
+// Requires a stock to be defined in the model.
+func (a *Assertion) WithinStock() *Assertion {
+	if !a.assertModelNotNil() {
+		return a
+	}
+
+	if a.model.Stock == nil {
+		a.addError("WithinStock requires a stock to be defined (use model.WithStock)")
+		return a
+	}
+
+	a.context = "WithinStock()"
+	stock := a.model.Stock
+
+	// Check holes
+	for i, h := range a.model.Holes {
+		// Check XY bounds
+		if !stock.ContainsXY(h.Center.X, h.Center.Y, a.tolerance) {
+			a.addError("hole[%d] at (%.4f, %.4f) is outside stock XY bounds [%.4f-%.4f, %.4f-%.4f]",
+				i, h.Center.X, h.Center.Y, stock.MinX(), stock.MaxX(), stock.MinY(), stock.MaxY())
+		}
+		// Check if hole exceeds stock depth
+		if h.BottomZ < stock.BottomZ()-a.tolerance {
+			excess := stock.BottomZ() - h.BottomZ
+			a.addError("hole[%d] at (%.4f, %.4f) exceeds stock depth: hole=%.4fmm, stock=%.4fmm (excess=%.4fmm)",
+				i, h.Center.X, h.Center.Y, h.Depth, stock.Depth, excess)
+		}
+	}
+
+	// Check slots
+	for i, s := range a.model.Slots {
+		if !stock.ContainsXY(s.Start.X, s.Start.Y, a.tolerance) {
+			a.addError("slot[%d] start (%.4f, %.4f) is outside stock XY bounds",
+				i, s.Start.X, s.Start.Y)
+		}
+		if !stock.ContainsXY(s.End.X, s.End.Y, a.tolerance) {
+			a.addError("slot[%d] end (%.4f, %.4f) is outside stock XY bounds",
+				i, s.End.X, s.End.Y)
+		}
+		if s.Z < stock.BottomZ()-a.tolerance {
+			a.addError("slot[%d] Z=%.4f exceeds stock bottom Z=%.4f",
+				i, s.Z, stock.BottomZ())
+		}
+	}
+
+	// Check contours
+	for i, c := range a.model.Contours {
+		for j, seg := range c.Segments {
+			if !stock.ContainsXY(seg.Start.X, seg.Start.Y, a.tolerance) {
+				a.addError("contour[%d].segment[%d] start (%.4f, %.4f) is outside stock XY bounds",
+					i, j, seg.Start.X, seg.Start.Y)
+			}
+			if !stock.ContainsXY(seg.End.X, seg.End.Y, a.tolerance) {
+				a.addError("contour[%d].segment[%d] end (%.4f, %.4f) is outside stock XY bounds",
+					i, j, seg.End.X, seg.End.Y)
+			}
+		}
+		if c.Z < stock.BottomZ()-a.tolerance {
+			a.addError("contour[%d] Z=%.4f exceeds stock bottom Z=%.4f",
+				i, c.Z, stock.BottomZ())
+		}
+	}
+
+	return a
+}
+
 // --- Utility Methods ---
 
 // And resets the context for a new assertion chain while preserving the pass/fail state.

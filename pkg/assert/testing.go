@@ -1,5 +1,15 @@
 package assert
 
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"path/filepath"
+	"runtime"
+	"strings"
+)
+
+var suiteID = newSuiteID()
+
 // TestingT is an interface that matches *testing.T methods we need.
 // This allows for easier testing of the assertion package itself.
 type TestingT interface {
@@ -20,6 +30,8 @@ func (a *Assertion) Assert(t TestingT) *Assertion {
 	// Notify observers before reporting failures
 	notifyAssert(AssertContext{
 		TestName:  t.Name(),
+		SuiteID:   suiteID,
+		SuiteName: detectSuiteName(),
 		Trace:     a.trace,
 		Model:     a.model,
 		Results:   results,
@@ -45,6 +57,8 @@ func (a *Assertion) AssertFatal(t TestingT) *Assertion {
 	// Notify observers before reporting failures
 	notifyAssert(AssertContext{
 		TestName:  t.Name(),
+		SuiteID:   suiteID,
+		SuiteName: detectSuiteName(),
 		Trace:     a.trace,
 		Model:     a.model,
 		Results:   results,
@@ -91,4 +105,27 @@ func (a *Assertion) buildValidationResults() []ValidationResult {
 	}
 
 	return results
+}
+
+func detectSuiteName() string {
+	for i := 2; i < 12; i++ {
+		_, file, _, ok := runtime.Caller(i)
+		if !ok || file == "" {
+			continue
+		}
+		if strings.Contains(file, string(filepath.Separator)+"pkg"+string(filepath.Separator)+"assert"+string(filepath.Separator)) {
+			continue
+		}
+		return filepath.Base(filepath.Dir(file))
+	}
+	return ""
+}
+
+func newSuiteID() string {
+	buf := make([]byte, 16)
+	_, err := rand.Read(buf)
+	if err != nil {
+		return ""
+	}
+	return hex.EncodeToString(buf)
 }

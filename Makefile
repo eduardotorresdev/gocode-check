@@ -96,7 +96,7 @@ examples:
 ## examples-ui: Run examples with UI visualization
 examples-ui:
 	@echo "Running examples with UI visualization..."
-	GOCODECHECK_UI=1 $(GOTEST) -v -p 1 ./examples/...
+	$(GOCMD) run ./cmd/gocodecheck test ./examples/...
 
 ## help: Show this help message
 help:

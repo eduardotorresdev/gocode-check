@@ -22,9 +22,12 @@ type Session struct {
 
 // SessionStartMessage is sent when a test session begins.
 type SessionStartMessage struct {
-	TestName          string `json:"testName"`
-	TotalEvents       int    `json:"totalEvents"`
-	TotalExpectations int    `json:"totalExpectations"`
+	SuiteID           string           `json:"suiteId,omitempty"`
+	SuiteName         string           `json:"suiteName,omitempty"`
+	TestName          string           `json:"testName"`
+	TotalEvents       int              `json:"totalEvents"`
+	TotalExpectations int              `json:"totalExpectations"`
+	Stock             *machining.Stock `json:"stock,omitempty"`
 }
 
 // SessionEndMessage is sent when a test session ends.

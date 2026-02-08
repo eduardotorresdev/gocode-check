@@ -3,6 +3,20 @@
   
   let { onEventClick = () => {} } = $props();
   
+  let timelineList = $state(null);
+  
+  // Auto-scroll to current event only when following live
+  $effect(() => {
+    if (!sessions.followLive || !timelineList) return;
+    
+    const currentIndex = sessions.currentIndex;
+    // Find the current element and scroll to it
+    const currentElement = timelineList.querySelector('.event-item.current');
+    if (currentElement) {
+      currentElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  });
+  
   function getEventColor(type) {
     switch (type) {
       case 'RapidMove': return 'var(--accent-red)';
@@ -38,6 +52,8 @@
   function handleClick(index) {
     onEventClick(index);
   }
+
+  const orderedEvents = $derived([...sessions.events].reverse());
 </script>
 
 <div class="event-timeline">
@@ -46,12 +62,12 @@
     <span class="counter">{sessions.currentIndex + 1} / {sessions.stats.total}</span>
   </div>
   
-  <div class="timeline-list">
-    {#each sessions.events as event, i}
+  <div class="timeline-list" bind:this={timelineList}>
+    {#each orderedEvents as event, i}
       <button 
         class="event-item"
-        class:current={i === sessions.currentIndex}
-        class:past={i < sessions.currentIndex}
+        class:current={event.index === sessions.currentIndex}
+        class:past={event.index < sessions.currentIndex}
         onclick={() => handleClick(event.index)}
       >
         <div class="event-index">{event.index}</div>

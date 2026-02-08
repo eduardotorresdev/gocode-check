@@ -23,9 +23,12 @@
   
   // Scale configuration: 3m view width
   const VIEW_WIDTH = 3000; // 3000mm = 3m
-  const WORKPIECE_SIZE = 2000; // 2m x 2m workpiece
-  const WORKPIECE_THICKNESS = 50; // 50mm thick
+  const DEFAULT_WORKPIECE_SIZE = 2000; // 2m x 2m workpiece (fallback)
+  const DEFAULT_WORKPIECE_THICKNESS = 50; // 50mm thick (fallback)
   const PATH_LINE_WIDTH = 3; // Thicker path lines
+  
+  // Track current stock for recreating workpiece
+  let currentStock = null;
   
   onMount(() => {
     initScene();
@@ -113,32 +116,73 @@
     cutMarks = new THREE.Group();
     scene.add(cutMarks);
     
-    // Pre-create cut material
+    // Pre-create cut material (red for material removal)
     cutMaterial = new THREE.MeshBasicMaterial({
-      color: 0x3a3a3a,
+      color: 0xcc3333, // Red to indicate material removal
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.85,
     });
   }
   
-  function createWorkpiece() {
-    // Workpiece material - black color
+  function createWorkpiece(stock = null) {
+    // Remove existing workpiece if any
+    if (workpiece) {
+      scene.remove(workpiece);
+      if (workpiece.geometry) workpiece.geometry.dispose();
+      if (workpiece.material) workpiece.material.dispose();
+      workpiece = null;
+    }
+    
+    // Use stock dimensions or defaults
+    const width = stock?.width ?? DEFAULT_WORKPIECE_SIZE;
+    const height = stock?.height ?? DEFAULT_WORKPIECE_SIZE;
+    const depth = stock?.depth ?? DEFAULT_WORKPIECE_THICKNESS;
+    
+    // Stock position - Position.Z is the BOTTOM of the stock (minimum Z)
+    // TopZ = Position.Z + Depth
+    const posX = stock?.position?.X ?? 0;
+    const posY = stock?.position?.Y ?? 0;
+    const bottomZ = stock?.position?.Z ?? -depth;
+    
+    // Store current stock for comparison
+    currentStock = stock;
+    
+    // Workpiece material - wood-like color when stock is defined, dark otherwise
+    const hasStock = !!stock;
     const workpieceMaterial = new THREE.MeshStandardMaterial({
-      color: 0x1a1a1a, // Dark black
-      roughness: 0.6,
-      metalness: 0.2,
+      color: hasStock ? 0xDEB887 : 0x1a1a1a, // BurlyWood or dark black
+      roughness: hasStock ? 0.8 : 0.6,
+      metalness: hasStock ? 0.1 : 0.2,
+      transparent: hasStock,
+      opacity: hasStock ? 0.85 : 1.0,
     });
     
     // Create workpiece geometry - lies on XY plane, extends down in Z
-    const workpieceGeometry = new THREE.BoxGeometry(
-      WORKPIECE_SIZE, 
-      WORKPIECE_SIZE, 
-      WORKPIECE_THICKNESS
-    );
+    const workpieceGeometry = new THREE.BoxGeometry(width, height, depth);
     workpiece = new THREE.Mesh(workpieceGeometry, workpieceMaterial);
-    workpiece.position.z = -WORKPIECE_THICKNESS / 2; // Top surface at Z=0
+    
+    // Position: center of box at midpoint
+    // Box center is at (posX + width/2, posY + height/2, bottomZ + depth/2)
+    workpiece.position.set(
+      posX + width / 2,
+      posY + height / 2, 
+      bottomZ + depth / 2  // Center Z = bottomZ + depth/2
+    );
     workpiece.receiveShadow = true;
     scene.add(workpiece);
+    
+    // Add wireframe outline when stock is defined for better visibility
+    if (hasStock) {
+      const wireframeMaterial = new THREE.LineBasicMaterial({ 
+        color: 0x8B4513, // SaddleBrown 
+        linewidth: 2 
+      });
+      const wireframeGeometry = new THREE.EdgesGeometry(workpieceGeometry);
+      const wireframe = new THREE.LineSegments(wireframeGeometry, wireframeMaterial);
+      wireframe.position.copy(workpiece.position);
+      workpiece.userData.wireframe = wireframe;
+      scene.add(wireframe);
+    }
   }
   
   function createMillingTool() {
@@ -491,7 +535,8 @@
     
     // Create a groove that shows material removal
     const cutWidth = 8; // Width of the cut
-    const cutDepth = Math.min(Math.abs(to.z), WORKPIECE_THICKNESS);
+    const stockDepth = currentStock?.depth ?? DEFAULT_WORKPIECE_THICKNESS;
+    const cutDepth = Math.min(Math.abs(to.z), stockDepth);
     
     const cutGeometry = new THREE.BoxGeometry(length, cutWidth, cutDepth + 1);
     const cutMark = new THREE.Mesh(cutGeometry, cutMaterial);
@@ -508,13 +553,18 @@
   }
   
   function createDrillHole(point) {
+    // Use red color for holes (material removal)
     const holeMaterial = new THREE.MeshBasicMaterial({
-      color: 0x1a1a1a,
+      color: 0xcc3333, // Red to indicate removal
+      transparent: true,
+      opacity: 0.9,
     });
     
-    const depth = Math.min(Math.abs(point.z), WORKPIECE_THICKNESS);
+    const stockDepth = currentStock?.depth ?? DEFAULT_WORKPIECE_THICKNESS;
+    const depth = Math.min(Math.abs(point.z), stockDepth);
     const holeGeometry = new THREE.CylinderGeometry(8, 8, depth + 1, 16);
     const hole = new THREE.Mesh(holeGeometry, holeMaterial);
+    hole.rotation.x = Math.PI / 2; // Align with Z axis (vertical)
     hole.position.set(point.x, point.y, -depth / 2);
     
     cutMarks.add(hole);
@@ -527,12 +577,26 @@
     return `${v}`;
   }
   
+  // Helper to compare stock objects
+  function stockChanged(a, b) {
+    if (!a && !b) return false;
+    if (!a || !b) return true;
+    return a.width !== b.width || 
+           a.height !== b.height || 
+           a.depth !== b.depth ||
+           a.position?.X !== b.position?.X ||
+           a.position?.Y !== b.position?.Y ||
+           a.position?.Z !== b.position?.Z;
+  }
+  
   // Reactive getters
   $effect(() => {
     // This effect runs whenever active session changes
-    // Reset cut marks when session changes
+    // Reset cut marks and recreate workpiece when session changes
     const activeId = sessions.activeId;
-    if (activeId) {
+    const stock = sessions.stock;
+    
+    if (activeId && scene) {
       // Clear all cut marks for fresh render
       while (cutMarks && cutMarks.children.length > 0) {
         const child = cutMarks.children[0];
@@ -541,6 +605,17 @@
       }
       drillHoles = [];
       lastToolPathLength = 0;
+      
+      // Recreate workpiece with stock from session
+      if (stockChanged(currentStock, stock)) {
+        // Remove wireframe if exists
+        if (workpiece?.userData?.wireframe) {
+          scene.remove(workpiece.userData.wireframe);
+          workpiece.userData.wireframe.geometry.dispose();
+          workpiece.userData.wireframe.material.dispose();
+        }
+        createWorkpiece(stock);
+      }
     }
   });
 </script>

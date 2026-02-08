@@ -2,22 +2,32 @@
 
 let sessionList = $state([]);
 let activeSessionId = $state(null);
+let activeSuiteId = $state(null);
 let sessionIdCounter = $state(0);
+let followLive = $state(true);
 // Track which session is currently receiving events (the latest running session)
 let receivingSessionId = $state(null);
 // Track if user has manually changed the tab
 let userChangedTab = $state(false);
+let userChangedSuite = $state(false);
+// Track if there are tests currently running
+let testsRunning = $state(false);
 
 // Create session structure
-function createSession(testName) {
+function createSession(testName, suiteName, suiteId, stock = null) {
+  const resolvedSuiteId = suiteId || suiteName || 'default';
+  const resolvedSuiteName = suiteName || resolvedSuiteId;
   return {
     id: ++sessionIdCounter,
+    suiteId: resolvedSuiteId,
+    suiteName: resolvedSuiteName,
     testName: testName || `Test ${sessionIdCounter}`,
     events: [],
     expectations: [],
     currentIndex: -1,
     running: true,
     allPassed: null,
+    stock: stock, // Stock/workpiece definition
     machine: {
       position: { X: 0, Y: 0, Z: 0 },
       unit: 'mm',
@@ -56,14 +66,57 @@ function computeStats(events) {
 export const sessions = {
   get list() { return sessionList; },
   get activeId() { return activeSessionId; },
+  get activeSuiteId() { return activeSuiteId; },
+  get followLive() { return followLive; },
   get receivingId() { return receivingSessionId; },
+  get testsRunning() { return testsRunning; },
+  // Returns true if there's a session actively receiving events
+  get isReceiving() {
+    const receiving = sessionList.find(s => s.id === receivingSessionId);
+    return receiving?.running === true;
+  },
   get active() {
     return sessionList.find(s => s.id === activeSessionId) || null;
+  },
+  get suites() {
+    const map = new Map();
+    for (const session of sessionList) {
+      const key = session.suiteId || 'default';
+      if (!map.has(key)) {
+        map.set(key, {
+          id: key,
+          name: session.suiteName || key,
+          tests: [],
+          running: false,
+          allPassed: true,
+        });
+      }
+      const suite = map.get(key);
+      suite.tests.push(session);
+      if (session.running) {
+        suite.running = true;
+      }
+      if (session.allPassed === false) {
+        suite.allPassed = false;
+      }
+    }
+    return Array.from(map.values());
+  },
+  get tests() {
+    if (!activeSuiteId) return [];
+    return sessionList.filter(s => s.suiteId === activeSuiteId);
   },
   get receiving() {
     return sessionList.find(s => s.id === receivingSessionId) || null;
   },
   get count() { return sessionList.length; },
+
+  // Get stock for active session
+  get stock() {
+    const session = this.active;
+    if (!session) return null;
+    return session.stock;
+  },
 
   // Get tool path for active session
   get toolPath() {
@@ -97,7 +150,7 @@ export const sessions = {
 
   // Get events for active session
   get events() {
-    const session = this.active;
+    const session = this.active ?? this.receiving;
     if (!session) return [];
     return session.events;
   },
@@ -111,22 +164,76 @@ export const sessions = {
 
   // Get current index for active session
   get currentIndex() {
-    const session = this.active;
+    const session = this.active ?? this.receiving;
     if (!session) return -1;
     return session.currentIndex;
   },
 
   // Create new session - this becomes the receiving session
-  create(testName) {
-    const session = createSession(testName);
+  create(testName, suiteName, suiteId, stock = null) {
+    const session = createSession(testName, suiteName, suiteId, stock);
     sessionList.push(session);
     // New session becomes the receiving session
     receivingSessionId = session.id;
-    // Only switch to new tab if user hasn't manually changed tabs
-    if (!userChangedTab) {
+    // Mark that tests are running
+    testsRunning = true;
+    // Only switch to new tab/suite if user is in follow live mode
+    // If user clicked on a specific event (followLive=false), don't change their view
+    if (followLive) {
       activeSessionId = session.id;
+      activeSuiteId = session.suiteId;
     }
     return session.id;
+  },
+
+  setFollowLive(value) {
+    followLive = value;
+  },
+
+  // Resume live mode and switch to the receiving session/suite
+  resumeLive() {
+    followLive = true;
+    userChangedTab = false;
+    userChangedSuite = false;
+    // Switch to the session that's currently receiving events
+    const receiving = this.receiving;
+    if (receiving) {
+      activeSessionId = receiving.id;
+      activeSuiteId = receiving.suiteId;
+      // Jump to the latest event and update machine state
+      if (receiving.events.length > 0) {
+        const lastEvent = receiving.events[receiving.events.length - 1];
+        receiving.currentIndex = lastEvent.index;
+        // Update machine state to match the latest event
+        if (lastEvent.stateAfter) {
+          const newMachine = { ...receiving.machine };
+          if (lastEvent.stateAfter.Position) {
+            newMachine.position = { ...lastEvent.stateAfter.Position };
+          }
+          if (lastEvent.stateAfter.Unit) newMachine.unit = lastEvent.stateAfter.Unit;
+          if (lastEvent.stateAfter.Mode) newMachine.mode = lastEvent.stateAfter.Mode;
+          if (lastEvent.stateAfter.Tool !== undefined) newMachine.tool = lastEvent.stateAfter.Tool;
+          if (lastEvent.stateAfter.Feed !== undefined) newMachine.feed = lastEvent.stateAfter.Feed;
+          if (lastEvent.stateAfter.Spindle !== undefined) newMachine.spindle = lastEvent.stateAfter.Spindle;
+          if (lastEvent.stateAfter.SpindleOn !== undefined) newMachine.spindleOn = lastEvent.stateAfter.SpindleOn;
+          if (lastEvent.stateAfter.SpindleCW !== undefined) newMachine.spindleCW = lastEvent.stateAfter.SpindleCW;
+          receiving.machine = newMachine;
+        }
+      }
+    }
+  },
+
+  setActiveSuite(suiteId) {
+    const suite = sessionList.find(s => s.suiteId === suiteId);
+    if (!suite) return;
+    activeSuiteId = suiteId;
+    userChangedSuite = true;
+    followLive = false;
+    const tests = sessionList.filter(s => s.suiteId === suiteId);
+    if (tests.length > 0) {
+      activeSessionId = tests[tests.length - 1].id;
+      userChangedTab = true;
+    }
   },
 
   // Select active session (for viewing) - marks as manual change
@@ -134,8 +241,11 @@ export const sessions = {
     const session = sessionList.find(s => s.id === sessionId);
     if (session) {
       activeSessionId = sessionId;
+  activeSuiteId = session.suiteId;
       // Mark that user manually changed the tab
       userChangedTab = true;
+      userChangedSuite = true;
+      followLive = false;
       // When switching tabs, restore the machine state from that session's last event
       // This ensures the viewer shows the correct state for the selected session
       if (session.events.length > 0 && session.currentIndex >= 0) {
@@ -162,8 +272,16 @@ export const sessions = {
   addEvent(event) {
     const session = this.receiving;
     if (session) {
+      if (!activeSessionId) {
+        activeSessionId = session.id;
+        activeSuiteId = session.suiteId;
+      }
       session.events.push(event);
-      session.currentIndex = event.index;
+      if (session.id !== activeSessionId) {
+        session.currentIndex = event.index;
+      } else if (followLive) {
+        session.currentIndex = event.index;
+      }
     }
   },
 
@@ -179,6 +297,9 @@ export const sessions = {
   updateMachine(newState) {
     const session = this.receiving;
     if (session && newState) {
+      if (session.id === activeSessionId && !followLive) {
+        return;
+      }
       const newMachine = { ...session.machine };
       if (newState.Position) {
         newMachine.position = { ...newState.Position };
@@ -201,12 +322,19 @@ export const sessions = {
       session.running = false;
       session.allPassed = allPassed;
     }
+    // Check if there are still any running sessions
+    testsRunning = sessionList.some(s => s.running);
   },
 
   // Set current index in active session (for navigation/playback)
-  setCurrentIndex(index) {
+  // userInitiated: true when user clicks on an event, false for automatic playback
+  setCurrentIndex(index, userInitiated = true) {
     const session = this.active;
     if (session) {
+      // Only disable follow live if user initiated the navigation
+      if (userInitiated) {
+        followLive = false;
+      }
       session.currentIndex = index;
       // Update machine state based on the event at that index
       const event = session.events.find(e => e.index === index);
@@ -231,18 +359,29 @@ export const sessions = {
   clear() {
     sessionList.length = 0;
     activeSessionId = null;
+    activeSuiteId = null;
     receivingSessionId = null;
     sessionIdCounter = 0;
     userChangedTab = false;
+    userChangedSuite = false;
+    followLive = true;
+    testsRunning = false;
   },
 
   // Remove specific session
   remove(sessionId) {
     const index = sessionList.findIndex(s => s.id === sessionId);
     if (index >= 0) {
+      const removed = sessionList[index];
       sessionList.splice(index, 1);
       if (activeSessionId === sessionId) {
-        activeSessionId = sessionList.length > 0 ? sessionList[0].id : null;
+        const remainingForSuite = sessionList.filter(s => s.suiteId === removed.suiteId);
+        if (remainingForSuite.length > 0) {
+          activeSessionId = remainingForSuite[remainingForSuite.length - 1].id;
+        } else {
+          activeSessionId = sessionList.length > 0 ? sessionList[0].id : null;
+          activeSuiteId = sessionList.length > 0 ? sessionList[0].suiteId : null;
+        }
       }
       if (receivingSessionId === sessionId) {
         // Find the next running session or null

@@ -1,6 +1,7 @@
 <script>
   import { send } from '../state/connection.svelte.js';
   import { flow } from '../state/flow.svelte.js';
+  import { sessions } from '../state/sessions.svelte.js';
   
   function setSpeed(newSpeed) {
     flow.setSpeed(newSpeed);
@@ -10,16 +11,19 @@
   function togglePause() {
     if (flow.isPaused) {
       flow.resume();
-      send({ type: 'resume' });
     } else {
       flow.pause();
-      send({ type: 'pause' });
     }
   }
   
   function step() {
     flow.step();
-    send({ type: 'step' });
+  }
+
+  function resumeLive() {
+    sessions.resumeLive();
+    // Always set to playing when resuming live
+    flow.resume();
   }
 </script>
 
@@ -50,7 +54,9 @@
   </div>
   
   <div class="flow-status">
-    {#if flow.isPaused}
+    {#if sessions.followLive && sessions.isReceiving}
+      <span class="status live"><span class="live-dot"></span> Live</span>
+    {:else if flow.isPaused}
       <span class="status paused">⏸ Paused</span>
     {:else if flow.isStepping}
       <span class="status stepping">⏭ Stepping</span>
@@ -70,6 +76,11 @@
     <button class="control-btn" onclick={step}>
       <span class="icon">⏭</span> Step
     </button>
+    {#if !sessions.followLive && sessions.isReceiving}
+      <button class="control-btn live-btn" onclick={resumeLive}>
+        <span class="live-dot"></span> Resume Live
+      </button>
+    {/if}
   </div>
 </div>
 
@@ -130,6 +141,10 @@
   .control-btn:hover {
     background: var(--bg-hover);
   }
+
+  .live-btn {
+    border: 1px solid rgba(255, 59, 48, 0.4);
+  }
   
   .icon {
     font-size: 10px;
@@ -150,6 +165,27 @@
   .status.playing {
     background: var(--accent-green);
     color: var(--bg-primary);
+  }
+
+  .status.live {
+    background: var(--accent-red);
+    color: var(--bg-primary);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #fff;
+    animation: livePulse 1s infinite;
+  }
+
+  @keyframes livePulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.85); }
   }
 
   .status.paused {

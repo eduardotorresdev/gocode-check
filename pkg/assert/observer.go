@@ -28,6 +28,10 @@ type ValidationResult struct {
 type AssertContext struct {
 	// TestName is the name of the test function
 	TestName string `json:"testName"`
+	// SuiteID is a unique identifier for the test runner (process)
+	SuiteID string `json:"suiteId,omitempty"`
+	// SuiteName is the logical suite/package name
+	SuiteName string `json:"suiteName,omitempty"`
 	// Trace is the execution trace being validated
 	Trace *interpreter.ExecutionTrace `json:"trace,omitempty"`
 	// Model is the machining model being validated

@@ -7,12 +7,19 @@ let flowState = $state({
   speed: 'normal',  // 'fast' | 'normal' | 'slow'
 });
 
+const speedDelays = {
+  fast: 50,
+  normal: 200,
+  slow: 500,
+};
+
 export const flow = {
   get state() { return flowState.state; },
   get speed() { return flowState.speed; },
   get isPaused() { return flowState.state === 'paused'; },
   get isPlaying() { return flowState.state === 'playing'; },
   get isStepping() { return flowState.state === 'stepping'; },
+  getDelayMs() { return speedDelays[flowState.speed] ?? 200; },
 
   setState(newState) {
     flowState.state = newState;

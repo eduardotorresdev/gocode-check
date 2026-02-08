@@ -9,11 +9,15 @@
 // Enable the UI in your TestMain:
 //
 //	func TestMain(m *testing.M) {
+//	    var cleanup func()
 //	    if os.Getenv("GOCODECHECK_UI") != "" {
-//	        cleanup := ui.Enable(ui.DefaultConfig())
-//	        defer cleanup()
+//	        cleanup = ui.Enable(ui.DefaultConfig())
 //	    }
-//	    os.Exit(m.Run())
+//	    exitCode := m.Run()
+//	    if cleanup != nil {
+//	        cleanup()
+//	    }
+//	    os.Exit(exitCode)
 //	}
 //
 // Then run your tests with the environment variable:

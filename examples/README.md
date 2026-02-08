@@ -13,6 +13,11 @@ go test -v ./examples/...
 
 ### With UI (Real-time visualization)
 ```bash
+gocodecheck test ./examples/...
+```
+
+You can still run UI directly with `go test` (one server per package):
+```bash
 GOCODECHECK_UI=1 go test -v ./examples/...
 ```
 
@@ -80,11 +85,15 @@ Use these examples as templates. The basic pattern is:
 
 ```go
 func TestMain(m *testing.M) {
+    var cleanup func()
     if os.Getenv("GOCODECHECK_UI") != "" {
-        cleanup := ui.Enable(ui.DefaultConfig())
-        defer cleanup()
+        cleanup = ui.Enable(ui.DefaultConfig())
     }
-    os.Exit(m.Run())
+    exitCode := m.Run()
+    if cleanup != nil {
+        cleanup()
+    }
+    os.Exit(exitCode)
 }
 
 func TestMyGCode(t *testing.T) {

@@ -10,50 +10,140 @@
     };
   }
 
-  // Format expectation in a more human-friendly way
-  function formatExpectation(exp) {
-    // Try to parse the description for better formatting
-    let formatted = exp.description;
-    
-    // If we have expected/actual values, format them nicely
-    if (exp.expected !== undefined && exp.actual !== undefined && !exp.passed) {
-      const expectedStr = formatValue(exp.expected);
-      const actualStr = formatValue(exp.actual);
-      return {
-        message: formatted,
-        details: `Expected: ${expectedStr}, Got: ${actualStr}`,
-        status: '✗ Failed'
-      };
-    } else if (exp.passed) {
-      return {
-        message: formatted,
-        details: null,
-        status: '✓ Passed'
-      };
-    } else if (exp.errorMessage) {
-      return {
-        message: formatted,
-        details: exp.errorMessage,
-        status: '✗ Failed'
+  // Parse the technical description into human-friendly format
+  function parseDescription(desc) {
+    if (!desc) return { icon: '❓', title: 'Unknown', details: [] };
+
+    // HasHole(x, y) with optional chained filters
+    const holeMatch = desc.match(/HasHole\(([-\d.]+),\s*([-\d.]+)\)(.*)/);
+    if (holeMatch) {
+      const x = parseFloat(holeMatch[1]).toFixed(1);
+      const y = parseFloat(holeMatch[2]).toFixed(1);
+      const chain = holeMatch[3] || '';
+      
+      const details = [];
+      details.push(`Position: (${x}, ${y})`);
+      
+      const depthMatch = chain.match(/\.WithDepth\(([-\d.]+)\)/);
+      if (depthMatch) {
+        details.push(`Depth: ${parseFloat(depthMatch[1]).toFixed(1)}mm`);
+      }
+      
+      const diameterMatch = chain.match(/\.WithDiameter\(([-\d.]+)\)/);
+      if (diameterMatch) {
+        details.push(`Diameter: ${parseFloat(diameterMatch[1]).toFixed(1)}mm`);
+      }
+      
+      const toolMatch = chain.match(/\.WithTool\((\d+)\)/);
+      if (toolMatch) {
+        details.push(`Tool: T${toolMatch[1]}`);
+      }
+      
+      return { icon: '🕳️', title: 'Hole', details };
+    }
+
+    // HasHoleCount(n)
+    const holeCountMatch = desc.match(/HasHoleCount\((\d+)\)/);
+    if (holeCountMatch) {
+      return { 
+        icon: '🔢', 
+        title: 'Hole Count', 
+        details: [`Expected: ${holeCountMatch[1]} holes`] 
       };
     }
-    
-    return {
-      message: formatted,
-      details: null,
-      status: exp.passed ? '✓ Passed' : '✗ Failed'
-    };
+
+    // HasSlot((x1, y1) -> (x2, y2)) with optional filters
+    const slotMatch = desc.match(/HasSlot\(\(([-\d.]+),\s*([-\d.]+)\)\s*->\s*\(([-\d.]+),\s*([-\d.]+)\)\)(.*)/);
+    if (slotMatch) {
+      const x1 = parseFloat(slotMatch[1]).toFixed(1);
+      const y1 = parseFloat(slotMatch[2]).toFixed(1);
+      const x2 = parseFloat(slotMatch[3]).toFixed(1);
+      const y2 = parseFloat(slotMatch[4]).toFixed(1);
+      const chain = slotMatch[5] || '';
+      
+      const details = [];
+      details.push(`From: (${x1}, ${y1})`);
+      details.push(`To: (${x2}, ${y2})`);
+      
+      const widthMatch = chain.match(/\.WithWidth\(([-\d.]+)\)/);
+      if (widthMatch) {
+        details.push(`Width: ${parseFloat(widthMatch[1]).toFixed(1)}mm`);
+      }
+      
+      const depthMatch = chain.match(/\.WithSlotDepth\(([-\d.]+)\)/);
+      if (depthMatch) {
+        details.push(`Depth: ${parseFloat(depthMatch[1]).toFixed(1)}mm`);
+      }
+      
+      return { icon: '📏', title: 'Slot', details };
+    }
+
+    // HasSlotCount(n)
+    const slotCountMatch = desc.match(/HasSlotCount\((\d+)\)/);
+    if (slotCountMatch) {
+      return { 
+        icon: '🔢', 
+        title: 'Slot Count', 
+        details: [`Expected: ${slotCountMatch[1]} slots`] 
+      };
+    }
+
+    // HasContour() with optional filters
+    const contourMatch = desc.match(/HasContour\(\)(.*)/);
+    if (contourMatch) {
+      const chain = contourMatch[1] || '';
+      const details = [];
+      
+      if (chain.includes('.IsClosed()')) {
+        details.push('Type: Closed loop');
+      } else if (chain.includes('.IsOpen()')) {
+        details.push('Type: Open path');
+      }
+      
+      const segmentMatch = chain.match(/\.HasSegmentCount\((\d+)\)/);
+      if (segmentMatch) {
+        details.push(`Segments: ${segmentMatch[1]}`);
+      }
+      
+      return { icon: '🔲', title: 'Contour', details };
+    }
+
+    // HasContourCount(n)
+    const contourCountMatch = desc.match(/HasContourCount\((\d+)\)/);
+    if (contourCountMatch) {
+      return { 
+        icon: '🔢', 
+        title: 'Contour Count', 
+        details: [`Expected: ${contourCountMatch[1]} contours`] 
+      };
+    }
+
+    // NoOperationOutside bounds
+    const boundsMatch = desc.match(/NoOperationOutside/);
+    if (boundsMatch) {
+      return { 
+        icon: '📐', 
+        title: 'Boundary Check', 
+        details: ['All operations within bounds'] 
+      };
+    }
+
+    // Fallback - just show the raw description
+    return { icon: '✓', title: 'Assertion', details: [desc] };
   }
 
-  function formatValue(val) {
-    if (val === null) return 'null';
-    if (val === undefined) return 'undefined';
-    if (typeof val === 'object') {
-      // Try to format objects nicely
-      if (Array.isArray(val)) return `${val.length} items`;
-      return JSON.stringify(val);
+  // Format expectation with human-readable info
+  function formatExpectation(exp) {
+    const parsed = parseDescription(exp.description);
+    
+    if (!exp.passed && exp.errorMessage) {
+      return {
+        ...parsed,
+        error: exp.errorMessage
+      };
     }
-    return String(val);
+    
+    return parsed;
   }
 </script>
 
@@ -71,13 +161,16 @@
       {@const formatted = formatExpectation(exp)}
       <div class="expectation-item" class:passed={exp.passed} class:failed={!exp.passed}>
         <div class="expectation-header">
-          <span class="icon">{exp.passed ? '✓' : '✗'}</span>
-          <span class="status">{formatted.status}</span>
+          <span class="type-icon">{formatted.icon}</span>
+          <span class="type-title">{formatted.title}</span>
+          <span class="status-icon">{exp.passed ? '✓' : '✗'}</span>
         </div>
         <div class="content">
-          <div class="description">{formatted.message}</div>
-          {#if formatted.details}
-            <div class="details">{formatted.details}</div>
+          {#each formatted.details as detail}
+            <div class="detail">{detail}</div>
+          {/each}
+          {#if formatted.error}
+            <div class="error-message">{formatted.error}</div>
           {/if}
         </div>
       </div>
@@ -167,67 +260,57 @@
     gap: var(--spacing-sm);
   }
   
-  .icon {
-    font-size: 16px;
-    width: 20px;
+  .type-icon {
+    font-size: 18px;
+    width: 24px;
     text-align: center;
-    font-weight: bold;
   }
   
-  .expectation-item.passed .icon {
+  .type-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+  }
+
+  .status-icon {
+    font-size: 14px;
+    font-weight: bold;
+    width: 20px;
+    text-align: center;
+  }
+  
+  .expectation-item.passed .status-icon {
     color: var(--accent-green);
   }
   
-  .expectation-item.failed .icon {
+  .expectation-item.failed .status-icon {
     color: var(--accent-red);
-  }
-
-  .status {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: var(--radius-sm);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .expectation-item.passed .status {
-    background: var(--accent-green);
-    color: var(--bg-primary);
-  }
-
-  .expectation-item.failed .status {
-    background: var(--accent-red);
-    color: white;
   }
   
   .content {
-    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-xs);
-    padding-left: 28px;
+    gap: 2px;
+    padding-left: 32px;
   }
   
-  .description {
-    font-size: 13px;
-    color: var(--text-primary);
-    font-weight: 500;
-    line-height: 1.4;
-  }
-  
-  .details {
+  .detail {
     font-size: 11px;
     color: var(--text-secondary);
     font-family: var(--font-mono);
-    background: var(--bg-primary);
-    padding: var(--spacing-xs);
-    border-radius: var(--radius-sm);
-    line-height: 1.3;
   }
   
-  .expectation-item.failed .details {
-    color: var(--accent-red-dim, #ff8888);
+  .error-message {
+    font-size: 11px;
+    color: var(--accent-red);
+    font-family: var(--font-mono);
+    background: rgba(255, 50, 50, 0.1);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    margin-top: var(--spacing-xs);
+    line-height: 1.4;
+    white-space: pre-wrap;
   }
   
   .empty {

@@ -17,14 +17,18 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	var cleanup func()
 	// Enable UI visualization when GOCODECHECK_UI is set
 	if os.Getenv("GOCODECHECK_UI") != "" {
-		cleanup := ui.Enable(ui.DefaultConfig().
+		cleanup = ui.Enable(ui.DefaultConfig().
 			WithSpeed(ui.SpeedSlow). // Slow speed for better visualization
 			WithAutoOpen(true))
-		defer cleanup()
 	}
-	os.Exit(m.Run())
+	exitCode := m.Run()
+	if cleanup != nil {
+		cleanup()
+	}
+	os.Exit(exitCode)
 }
 
 // TestCompleteBracketPart validates a complete machined bracket with:
@@ -160,8 +164,8 @@ M30             ; Program end
 	// ========================================
 	t.Run("WorkEnvelope", func(t *testing.T) {
 		bounds := assert.Bounds{
-			MinX: 0, MaxX: 150,  // Stock width
-			MinY: 0, MaxY: 100,  // Stock height
+			MinX: 0, MaxX: 150, // Stock width
+			MinY: 0, MaxY: 100, // Stock height
 			MinZ: -25, MaxZ: 10, // Max depth + clearance
 		}
 

@@ -3,6 +3,9 @@ package machining
 // MachiningModel represents the semantic model of machining operations.
 // It contains all recognized geometric features extracted from G-code events.
 type MachiningModel struct {
+	// Stock is the raw workpiece being machined (optional).
+	Stock *Stock
+
 	// Holes contains all detected hole features.
 	Holes []Hole
 
@@ -20,6 +23,25 @@ func NewMachiningModel() *MachiningModel {
 		Slots:    make([]Slot, 0),
 		Contours: make([]Contour, 0),
 	}
+}
+
+// WithStock sets the stock (raw workpiece) for the model.
+// Returns the model for method chaining.
+func (m *MachiningModel) WithStock(width, height, depth float64) *MachiningModel {
+	m.Stock = NewStock(width, height, depth)
+	return m
+}
+
+// WithStockAt sets the stock with a custom position.
+// Returns the model for method chaining.
+func (m *MachiningModel) WithStockAt(width, height, depth, x, y, z float64) *MachiningModel {
+	m.Stock = NewStock(width, height, depth).At(x, y, z)
+	return m
+}
+
+// HasStock returns true if a stock is defined.
+func (m *MachiningModel) HasStock() bool {
+	return m.Stock != nil
 }
 
 // AddHole adds a hole to the model.

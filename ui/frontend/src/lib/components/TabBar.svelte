@@ -15,7 +15,7 @@
 </script>
 
 <div class="tab-bar">
-  {#each sessions.list as session}
+  {#each sessions.tests as session}
     <div
       class="tab"
       class:active={session.id === sessions.activeId}

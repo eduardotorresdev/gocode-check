@@ -6,6 +6,90 @@ import (
 	"github.com/eduardotorresdev/gocode-check/pkg/interpreter"
 )
 
+// Stock represents the raw workpiece (material block) being machined.
+// In CNC conventions, the top surface is at Z=0 and the piece extends downward.
+type Stock struct {
+	// Width is the X dimension of the stock.
+	Width float64 `json:"width"`
+
+	// Height is the Y dimension of the stock.
+	Height float64 `json:"height"`
+
+	// Depth is the Z dimension (thickness) of the stock.
+	// The stock extends from TopZ to TopZ-Depth.
+	Depth float64 `json:"depth"`
+
+	// Position is the XYZ position of the stock's minimum corner.
+	// Default is (0, 0, -Depth) meaning top surface at Z=0.
+	Position Point3D `json:"position"`
+}
+
+// NewStock creates a new stock with the given dimensions.
+// The stock is positioned with its top surface at Z=0 and bottom at Z=-depth.
+func NewStock(width, height, depth float64) *Stock {
+	return &Stock{
+		Width:    width,
+		Height:   height,
+		Depth:    depth,
+		Position: Point3D{X: 0, Y: 0, Z: -depth},
+	}
+}
+
+// At sets the position of the stock's minimum corner.
+// Returns the stock for method chaining.
+func (s *Stock) At(x, y, z float64) *Stock {
+	s.Position = Point3D{X: x, Y: y, Z: z}
+	return s
+}
+
+// TopZ returns the Z coordinate of the top surface.
+func (s *Stock) TopZ() float64 {
+	return s.Position.Z + s.Depth
+}
+
+// BottomZ returns the Z coordinate of the bottom surface.
+func (s *Stock) BottomZ() float64 {
+	return s.Position.Z
+}
+
+// MinX returns the minimum X coordinate.
+func (s *Stock) MinX() float64 {
+	return s.Position.X
+}
+
+// MaxX returns the maximum X coordinate.
+func (s *Stock) MaxX() float64 {
+	return s.Position.X + s.Width
+}
+
+// MinY returns the minimum Y coordinate.
+func (s *Stock) MinY() float64 {
+	return s.Position.Y
+}
+
+// MaxY returns the maximum Y coordinate.
+func (s *Stock) MaxY() float64 {
+	return s.Position.Y + s.Height
+}
+
+// Contains checks if a point is within the stock bounds (with tolerance).
+func (s *Stock) Contains(x, y, z, tolerance float64) bool {
+	return x >= s.MinX()-tolerance && x <= s.MaxX()+tolerance &&
+		y >= s.MinY()-tolerance && y <= s.MaxY()+tolerance &&
+		z >= s.BottomZ()-tolerance && z <= s.TopZ()+tolerance
+}
+
+// ContainsXY checks if a 2D point is within the stock XY bounds (with tolerance).
+func (s *Stock) ContainsXY(x, y, tolerance float64) bool {
+	return x >= s.MinX()-tolerance && x <= s.MaxX()+tolerance &&
+		y >= s.MinY()-tolerance && y <= s.MaxY()+tolerance
+}
+
+// IsPassThrough checks if a depth would go through the entire stock (with tolerance).
+func (s *Stock) IsPassThrough(topZ, bottomZ, tolerance float64) bool {
+	return bottomZ <= s.BottomZ()+tolerance
+}
+
 // Point2D represents a 2D coordinate in the XY plane.
 type Point2D struct {
 	X float64
@@ -26,9 +110,9 @@ func (p Point2D) Distance(other Point2D) float64 {
 
 // Point3D represents a 3D coordinate.
 type Point3D struct {
-	X float64
-	Y float64
-	Z float64
+	X float64 `json:"X"`
+	Y float64 `json:"Y"`
+	Z float64 `json:"Z"`
 }
 
 // Equal checks if two 3D points are equal within a tolerance.

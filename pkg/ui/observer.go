@@ -6,12 +6,15 @@ import (
 
 	"github.com/eduardotorresdev/gocode-check/pkg/assert"
 	"github.com/eduardotorresdev/gocode-check/pkg/interpreter"
+	"github.com/eduardotorresdev/gocode-check/pkg/machining"
+	"github.com/eduardotorresdev/gocode-check/pkg/parser"
 )
 
 // uiObserver implements both interpreter.Observer and assert.Observer
 type uiObserver struct {
 	viewer            *Viewer
 	currentTotalSteps int
+	instructionByLine map[int]parser.Instruction
 }
 
 // Verify interface compliance at compile time
@@ -22,7 +25,15 @@ var _ assert.Observer = (*uiObserver)(nil)
 func (o *uiObserver) OnInterpretStart(event interpreter.InterpretStartEvent) {
 	o.currentTotalSteps = event.TotalInstructions
 
-	o.viewer.server.Broadcast(Message{
+	// Build instruction lookup for later replay
+	o.instructionByLine = make(map[int]parser.Instruction, len(event.Instructions))
+	for _, inst := range event.Instructions {
+		if inst.LineNumber > 0 {
+			o.instructionByLine[inst.LineNumber] = inst
+		}
+	}
+
+	o.viewer.Broadcast(Message{
 		Type: "interpret_start",
 		Data: map[string]interface{}{
 			"totalInstructions": event.TotalInstructions,
@@ -38,7 +49,7 @@ func (o *uiObserver) OnStep(event interpreter.StepEvent) {
 	// Frontend controls only visualization, not emission
 
 	// Broadcast to UI
-	o.viewer.server.Broadcast(Message{
+	o.viewer.Broadcast(Message{
 		Type: "step",
 		Data: StepMessage{
 			Index:       event.Index,
@@ -59,7 +70,6 @@ func (o *uiObserver) OnStep(event interpreter.StepEvent) {
 	)
 
 	// Apply delay for human-readable visualization
-	// Speed is still controlled by config, not by FlowController
 	if o.viewer.config.Speed != SpeedManual {
 		delay := SpeedToDuration(o.viewer.config.Speed)
 		time.Sleep(delay)
@@ -69,7 +79,7 @@ func (o *uiObserver) OnStep(event interpreter.StepEvent) {
 // OnInterpretEnd handles the end of interpretation.
 func (o *uiObserver) OnInterpretEnd(event interpreter.InterpretEndEvent) {
 	if event.Error != nil {
-		o.viewer.server.Broadcast(Message{
+		o.viewer.Broadcast(Message{
 			Type: "interpret_error",
 			Data: map[string]interface{}{
 				"error": event.Error.Error(),
@@ -77,7 +87,7 @@ func (o *uiObserver) OnInterpretEnd(event interpreter.InterpretEndEvent) {
 		})
 		o.viewer.logger.Error("Interpretation failed: %v", event.Error)
 	} else {
-		o.viewer.server.Broadcast(Message{
+		o.viewer.Broadcast(Message{
 			Type: "interpret_end",
 			Data: map[string]interface{}{
 				"totalEvents": len(event.Trace.Events),
@@ -98,13 +108,22 @@ func (o *uiObserver) OnAssert(ctx assert.AssertContext) {
 	// Log test start
 	o.viewer.logger.TestStart(ctx.TestName)
 
+	// Get stock from model if available
+	var stock *machining.Stock
+	if ctx.Model != nil {
+		stock = ctx.Model.Stock
+	}
+
 	// Broadcast session start
-	o.viewer.server.Broadcast(Message{
+	o.viewer.Broadcast(Message{
 		Type: "session_start",
 		Data: SessionStartMessage{
+			SuiteID:           ctx.SuiteID,
+			SuiteName:         ctx.SuiteName,
 			TestName:          ctx.TestName,
 			TotalEvents:       o.currentTotalSteps,
 			TotalExpectations: len(ctx.Results),
+			Stock:             stock,
 		},
 	})
 
@@ -117,18 +136,31 @@ func (o *uiObserver) OnAssert(ctx assert.AssertContext) {
 			stateBefore := state.Clone()
 			// Update state based on event
 			state = applyEvent(state, event)
-			o.viewer.server.Broadcast(Message{
+
+			var instruction *parser.Instruction
+			if o.instructionByLine != nil && event.SourceLine > 0 {
+				if inst, ok := o.instructionByLine[event.SourceLine]; ok {
+					instruction = &inst
+				}
+			}
+			o.viewer.Broadcast(Message{
 				Type: "step",
 				Data: StepMessage{
 					Index:       i,
 					Total:       o.currentTotalSteps,
-					Instruction: nil, // Instruction not available in trace
+					Instruction: instruction,
 					Event:       event,
 					StateBefore: stateBefore,
 					StateAfter:  state,
 					HasError:    false,
 				},
 			})
+
+			// Apply delay for human-readable visualization (same as OnStep)
+			if o.viewer.config.Speed != SpeedManual {
+				delay := SpeedToDuration(o.viewer.config.Speed)
+				time.Sleep(delay)
+			}
 		}
 	}
 
@@ -136,7 +168,7 @@ func (o *uiObserver) OnAssert(ctx assert.AssertContext) {
 	passed := 0
 	failed := 0
 	for _, result := range ctx.Results {
-		o.viewer.server.Broadcast(Message{
+		o.viewer.Broadcast(Message{
 			Type: "expectation",
 			Data: ExpectationMessage{
 				Description:       result.Description,
@@ -161,7 +193,7 @@ func (o *uiObserver) OnAssert(ctx assert.AssertContext) {
 	o.viewer.logger.TestEnd(ctx.TestName, ctx.AllPassed, len(ctx.Results), failed)
 
 	// Broadcast session end
-	o.viewer.server.Broadcast(Message{
+	o.viewer.Broadcast(Message{
 		Type: "session_end",
 		Data: SessionEndMessage{
 			TestName:  ctx.TestName,

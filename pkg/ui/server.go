@@ -32,33 +32,45 @@ type client struct {
 
 // Server handles HTTP and WebSocket connections for the UI.
 type Server struct {
-	port       int
-	logger     *Logger
-	upgrader   websocket.Upgrader
-	clients    map[*client]bool
-	clientsMu  sync.RWMutex
-	broadcast  chan Message
-	httpServer *http.Server
-	url        string
-	flow       *FlowController
+	port        int
+	logger      *Logger
+	upgrader    websocket.Upgrader
+	clients     map[*client]bool
+	clientsMu   sync.RWMutex
+	producers   map[*client]bool
+	producersMu sync.RWMutex
+	broadcast   chan Message
+	httpServer  *http.Server
+	url         string
+	flow        *FlowController
+	speedMu     sync.RWMutex
+	speed       SpeedPreset
 
 	// Connection synchronization
-	connected     chan struct{}
-	connectedOnce sync.Once
+	connected           chan struct{}
+	connectedOnce       sync.Once
+	allDisconnected     chan struct{}
+	allDisconnectedOnce sync.Once
 
 	// Shutdown callback - called when last client disconnects
 	onAllClientsDisconnected func()
+
+	// Speed callback for external throttling
+	onSpeedChange func(SpeedPreset)
 }
 
 // NewServer creates a new UI server.
 func NewServer(port int, logger *Logger, flow *FlowController) *Server {
 	return &Server{
-		port:      port,
-		logger:    logger,
-		flow:      flow,
-		clients:   make(map[*client]bool),
-		broadcast: make(chan Message, 256),
-		connected: make(chan struct{}),
+		port:            port,
+		logger:          logger,
+		flow:            flow,
+		clients:         make(map[*client]bool),
+		producers:       make(map[*client]bool),
+		broadcast:       make(chan Message, 1024),
+		connected:       make(chan struct{}),
+		allDisconnected: make(chan struct{}),
+		speed:           SpeedNormal,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true // Allow all origins in development
@@ -140,6 +152,14 @@ func (s *Server) WaitForConnection(timeout time.Duration) bool {
 	}
 }
 
+// WaitForAllClientsDisconnected blocks until all clients disconnect.
+func (s *Server) WaitForAllClientsDisconnected() {
+	if s.ClientCount() == 0 {
+		return
+	}
+	<-s.allDisconnected
+}
+
 // ClientCount returns the number of connected clients.
 func (s *Server) ClientCount() int {
 	s.clientsMu.RLock()
@@ -149,12 +169,31 @@ func (s *Server) ClientCount() int {
 
 // Broadcast sends a message to all connected clients.
 func (s *Server) Broadcast(msg Message) {
+	if msg.Type == "step" {
+		// Block on step to apply throttling without dropping events
+		s.broadcast <- msg
+		return
+	}
 	select {
 	case s.broadcast <- msg:
 	default:
 		// Channel full, log warning
 		s.logger.Debug("Broadcast channel full, dropping message")
 	}
+}
+
+// SetSpeed updates the current playback speed used for throttling.
+func (s *Server) SetSpeed(speed SpeedPreset) {
+	s.speedMu.Lock()
+	defer s.speedMu.Unlock()
+	s.speed = speed
+}
+
+// GetSpeed returns the current playback speed.
+func (s *Server) GetSpeed() SpeedPreset {
+	s.speedMu.RLock()
+	defer s.speedMu.RUnlock()
+	return s.speed
 }
 
 func (s *Server) runBroadcast(ctx context.Context) {
@@ -189,6 +228,26 @@ func (s *Server) broadcastToClients(msg Message) {
 	}
 }
 
+func (s *Server) broadcastToProducers(msg Message) {
+	s.producersMu.RLock()
+	defer s.producersMu.RUnlock()
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		s.logger.Error("Failed to marshal producer message: %v", err)
+		return
+	}
+
+	for c := range s.producers {
+		c.writeMu.Lock()
+		err := c.conn.WriteMessage(websocket.TextMessage, data)
+		c.writeMu.Unlock()
+		if err != nil {
+			s.logger.Debug("Failed to send to producer: %v", err)
+		}
+	}
+}
+
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -196,24 +255,42 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	role := r.URL.Query().Get("role")
+	isProducer := role == "producer"
+
 	// Create client wrapper
 	c := &client{
 		conn: conn,
 		send: make(chan []byte, 256),
 	}
 
-	// Register client
-	s.clientsMu.Lock()
-	s.clients[c] = true
-	clientCount := len(s.clients)
-	s.clientsMu.Unlock()
+	// Register client (only for browser/consumer connections)
+	clientCount := 0
+	if isProducer {
+		s.producersMu.Lock()
+		s.producers[c] = true
+		s.producersMu.Unlock()
 
-	// Signal first connection
-	s.connectedOnce.Do(func() {
-		close(s.connected)
-	})
+		// Send current speed to new producer so it starts with correct delay
+		currentSpeed := s.GetSpeed()
+		c.writeMu.Lock()
+		_ = conn.WriteJSON(Message{Type: "set_speed", Data: string(currentSpeed)})
+		c.writeMu.Unlock()
+	}
 
-	s.logger.ConnectionStatus(true, clientCount)
+	if !isProducer {
+		s.clientsMu.Lock()
+		s.clients[c] = true
+		clientCount = len(s.clients)
+		s.clientsMu.Unlock()
+
+		// Signal first connection
+		s.connectedOnce.Do(func() {
+			close(s.connected)
+		})
+
+		s.logger.ConnectionStatus(true, clientCount)
+	}
 
 	// Send welcome message (using mutex for thread-safe write)
 	welcomeMsg := Message{
@@ -228,23 +305,37 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	c.writeMu.Unlock()
 
 	// Handle client messages
-	go s.readFromClient(c)
+	go s.readFromClient(c, isProducer)
 }
 
-func (s *Server) readFromClient(c *client) {
+func (s *Server) readFromClient(c *client, isProducer bool) {
 	defer func() {
-		s.clientsMu.Lock()
-		delete(s.clients, c)
-		clientCount := len(s.clients)
-		s.clientsMu.Unlock()
+		clientCount := 0
+		if !isProducer {
+			s.clientsMu.Lock()
+			delete(s.clients, c)
+			clientCount = len(s.clients)
+			s.clientsMu.Unlock()
 
-		s.logger.ConnectionStatus(false, clientCount)
+			if clientCount == 0 {
+				s.allDisconnectedOnce.Do(func() {
+					close(s.allDisconnected)
+				})
+			}
+
+			s.logger.ConnectionStatus(false, clientCount)
+		}
 		c.conn.Close()
 
 		// If all clients have disconnected and we have a shutdown callback, call it
-		if clientCount == 0 && s.onAllClientsDisconnected != nil {
+		if !isProducer && clientCount == 0 && s.onAllClientsDisconnected != nil {
 			s.logger.Info("All browsers disconnected. Shutting down server...")
 			go s.onAllClientsDisconnected()
+		}
+		if isProducer {
+			s.producersMu.Lock()
+			delete(s.producers, c)
+			s.producersMu.Unlock()
 		}
 	}()
 
@@ -263,7 +354,33 @@ func (s *Server) readFromClient(c *client) {
 			continue
 		}
 
-		s.handleClientCommand(cmd)
+		if s.isControlCommand(cmd.Type, cmd.Data) {
+			s.handleClientCommand(cmd)
+			continue
+		}
+
+		// Treat as external event payload and broadcast to all clients
+		s.Broadcast(cmd)
+	}
+}
+
+func (s *Server) isControlCommand(cmdType string, data interface{}) bool {
+	switch cmdType {
+	case "set_speed", "pause", "resume", "jump_to", "tab_switch":
+		return true
+	case "step":
+		// If it looks like a StepMessage payload, treat as event
+		if payload, ok := data.(map[string]interface{}); ok {
+			if _, hasIndex := payload["index"]; hasIndex {
+				return false
+			}
+			if _, hasEvent := payload["event"]; hasEvent {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
 	}
 }
 
@@ -271,6 +388,13 @@ func (s *Server) handleClientCommand(cmd Message) {
 	switch cmd.Type {
 	case "set_speed":
 		s.logger.Debug("Speed change requested: %v", cmd.Data)
+		if value, ok := cmd.Data.(string); ok {
+			s.SetSpeed(SpeedPreset(value))
+			if s.onSpeedChange != nil {
+				s.onSpeedChange(SpeedPreset(value))
+			}
+			s.broadcastToProducers(Message{Type: "set_speed", Data: value})
+		}
 	case "pause":
 		s.logger.Debug("Pause requested")
 		if s.flow != nil {

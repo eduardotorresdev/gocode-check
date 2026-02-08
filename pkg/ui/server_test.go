@@ -139,6 +139,61 @@ func TestServerBroadcast(t *testing.T) {
 	}
 }
 
+func TestServerExternalEventBroadcast(t *testing.T) {
+	logger := NewLogger(false)
+	flow := NewFlowController()
+	server := NewServer(0, logger, flow)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	url, err := server.Start(ctx)
+	if err != nil {
+		t.Fatalf("failed to start server: %v", err)
+	}
+
+	wsURL := "ws" + url[4:] + "/ws"
+	consumer, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to connect consumer WebSocket: %v", err)
+	}
+	defer consumer.Close()
+
+	producer, _, err := websocket.DefaultDialer.Dial(wsURL+"?role=producer", nil)
+	if err != nil {
+		t.Fatalf("failed to connect producer WebSocket: %v", err)
+	}
+	defer producer.Close()
+
+	// Read and discard welcome messages
+	_ = consumer.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, _, _ = consumer.ReadMessage()
+	_ = producer.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, _, _ = producer.ReadMessage()
+
+	// Send an event payload from producer
+	msg := Message{Type: "step", Data: map[string]interface{}{"index": 1, "event": map[string]interface{}{"Type": "RapidMove"}}}
+	if err := producer.WriteJSON(msg); err != nil {
+		t.Fatalf("failed to send producer message: %v", err)
+	}
+
+	// Consumer should receive it
+	_ = consumer.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, data, err := consumer.ReadMessage()
+	if err != nil {
+		t.Fatalf("failed to read broadcast: %v", err)
+	}
+
+	var received Message
+	if err := json.Unmarshal(data, &received); err != nil {
+		t.Fatalf("failed to unmarshal broadcast: %v", err)
+	}
+
+	if received.Type != "step" {
+		t.Fatalf("expected 'step' message, got '%s'", received.Type)
+	}
+}
+
 func TestServerWaitForConnection(t *testing.T) {
 	logger := NewLogger(false)
 	flow := NewFlowController()

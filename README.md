@@ -473,6 +473,15 @@ A biblioteca suporta dois modos de execução:
 - Ideal para ambientes de CI/CD
 - Resultados reproduzíveis entre execuções
 
+**UI Opcional (via CLI)**:
+- Um servidor UI global pode ser iniciado pelo comando `gocodecheck test`
+- Os testes continuam sendo `go test` normais por baixo (UI é opcional)
+- Exemplo:
+
+```bash
+gocodecheck test ./examples/...
+```
+
 **Headed Mode** (Futuro):
 - Inclui todas as funcionalidades do modo headless
 - Adiciona renderização visual (SVG, PNG, WebView)

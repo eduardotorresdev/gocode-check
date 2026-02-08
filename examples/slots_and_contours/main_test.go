@@ -16,14 +16,18 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	var cleanup func()
 	// Enable UI visualization when GOCODECHECK_UI is set
 	if os.Getenv("GOCODECHECK_UI") != "" {
-		cleanup := ui.Enable(ui.DefaultConfig().
+		cleanup = ui.Enable(ui.DefaultConfig().
 			WithSpeed(ui.SpeedNormal).
 			WithAutoOpen(true))
-		defer cleanup()
 	}
-	os.Exit(m.Run())
+	exitCode := m.Run()
+	if cleanup != nil {
+		cleanup()
+	}
+	os.Exit(exitCode)
 }
 
 // TestHorizontalSlot validates a simple horizontal slot
