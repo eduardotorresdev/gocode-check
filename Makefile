@@ -45,9 +45,29 @@ build:
 	@echo "Building..."
 	$(GOBUILD) -o $(BINARY_NAME) ./cmd/gocodecheck
 
-## release: Build release binary
+## install: Install the CLI binary
+install:
+	@echo "Installing gocodecheck..."
+	$(GOCMD) install ./cmd/gocodecheck
+
+## release: Create a new release (usage: make release VERSION=1.0.0)
 release:
-	@echo "Building release..."
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Error: VERSION is required. Usage: make release VERSION=1.0.0"; \
+		exit 1; \
+	fi
+	@./scripts/release.sh $(VERSION)
+
+## tag: Create and push git tag (usage: make tag VERSION=1.0.0)
+tag:
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Error: VERSION is required. Usage: make tag VERSION=1.0.0"; \
+		exit 1; \
+	fi
+	@echo "Creating tag v$(VERSION)..."
+	@git tag -a v$(VERSION) -m "Release v$(VERSION)"
+	@git push origin v$(VERSION)
+	@echo "Tag v$(VERSION) created and pushed successfully"
 	CGO_ENABLED=0 $(GOBUILD) -ldflags="-s -w" -o $(BINARY_NAME) ./cmd/gocodecheck
 
 ## clean: Clean build artifacts

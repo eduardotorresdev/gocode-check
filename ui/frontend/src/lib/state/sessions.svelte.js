@@ -14,7 +14,7 @@ let userChangedSuite = $state(false);
 let testsRunning = $state(false);
 
 // Create session structure
-function createSession(testName, suiteName, suiteId, stock = null) {
+function createSession(testName, suiteName, suiteId, stock = null, tools = null) {
   const resolvedSuiteId = suiteId || suiteName || 'default';
   const resolvedSuiteName = suiteName || resolvedSuiteId;
   return {
@@ -28,6 +28,7 @@ function createSession(testName, suiteName, suiteId, stock = null) {
     running: true,
     allPassed: null,
     stock: stock, // Stock/workpiece definition
+    tools: tools || {}, // Tool library (map of tool number to config)
     machine: {
       position: { X: 0, Y: 0, Z: 0 },
       unit: 'mm',
@@ -118,6 +119,27 @@ export const sessions = {
     return session.stock;
   },
 
+  // Get tools for active session
+  get tools() {
+    const session = this.active;
+    if (!session) return {};
+    return session.tools || {};
+  },
+
+  // Get current tool config for active session
+  get currentTool() {
+    const session = this.active;
+    if (!session || !session.machine.tool) return null;
+    const toolNumber = session.machine.tool;
+    // Return configured tool or default 6mm end mill
+    return session.tools?.[toolNumber] || {
+      number: toolNumber,
+      diameter: 6.0,
+      fluteLength: 25.0,
+      type: 'EndMill'
+    };
+  },
+
   // Get tool path for active session
   get toolPath() {
     const session = this.active;
@@ -170,8 +192,8 @@ export const sessions = {
   },
 
   // Create new session - this becomes the receiving session
-  create(testName, suiteName, suiteId, stock = null) {
-    const session = createSession(testName, suiteName, suiteId, stock);
+  create(testName, suiteName, suiteId, stock = null, tools = null) {
+    const session = createSession(testName, suiteName, suiteId, stock, tools);
     sessionList.push(session);
     // New session becomes the receiving session
     receivingSessionId = session.id;

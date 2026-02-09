@@ -1,0 +1,390 @@
+# gocode-check
+
+> Biblioteca Go para validação end-to-end de programas G-code através de interpretação lógica e análise semântica.
+
+## Instalação
+
+```bash
+go get github.com/eduardotorresdev/gocode-check
+```
+
+## Uso Rápido
+
+### CLI
+
+```bash
+# Executar com UI de visualização
+gocodecheck --ui examples/basic_holes/main_test.go
+
+# Executar testes headless
+go test ./examples/...
+
+# Atualizar snapshots
+go test ./examples/... -update
+
+# Ver eventos detalhados
+gocodecheck --events examples/complete_part/main_test.go
+```
+
+### Como Biblioteca
+
+```go
+package main
+
+import (
+    "github.com/eduardotorresdev/gocode-check/pkg/assert"
+    "github.com/eduardotorresdev/gocode-check/pkg/interpreter"
+    "github.com/eduardotorresdev/gocode-check/pkg/machining"
+    "github.com/eduardotorresdev/gocode-check/pkg/parser"
+)
+
+func TestFuros(t *testing.T) {
+    gcode := `
+        G90 G21
+        G00 Z5.0
+        G00 X10 Y10
+        G01 Z-5.0 F100
+        G00 Z5.0
+    `
+    
+    // Parse
+    p := parser.NewParser()
+    instructions, _ := p.Parse(gcode)
+    
+    // Interpret
+    interp := interpreter.NewInterpreter()
+    events, _ := interp.Interpret(instructions)
+    
+    // Analyze
+    model := machining.NewMachiningModel().
+        WithStock(100, 100, 10, machining.Position{X: 0, Y: 0, Z: -10}).
+        WithTool(1, 6.0, 25.0, machining.EndMill).
+        Analyze(events)
+    
+    // Assert
+    observer := assert.NewTestObserver(t)
+    defer observer.SaveSnapshot()
+    
+    a := assert.NewAssertion(model, observer)
+    a.Holes().ShouldHaveCount(1)
+    a.Holes().AtIndex(0).ShouldHaveDepth(5.0, 0.01)
+}
+```
+
+## Principais Componentes
+
+### 1. Parser (`pkg/parser`)
+Converte G-code em instruções estruturadas.
+
+```go
+p := parser.NewParser()
+instructions, err := p.Parse(gcode)
+```
+
+### 2. Interpreter (`pkg/interpreter`)
+Simula o comportamento lógico da CNC, gerando eventos de estado.
+
+```go
+interp := interpreter.NewInterpreter()
+events, err := interp.Interpret(instructions)
+```
+
+### 3. Machining Model (`pkg/machining`)
+Analisa eventos e identifica operações de usinagem (furos, ranhuras, contornos).
+
+```go
+model := machining.NewMachiningModel().
+    WithStock(width, height, depth, position).
+    WithTool(toolNumber, diameter, fluteLength, toolType).
+    Analyze(events)
+```
+
+**Tipos de Ferramentas:**
+- `machining.EndMill` - Fresa de topo (ponta plana)
+- `machining.BallNose` - Fresa esférica (ponta arredondada)
+
+### 4. Assertions (`pkg/assert`)
+API fluente para validações de usinagem.
+
+```go
+observer := assert.NewTestObserver(t)
+defer observer.SaveSnapshot()
+
+a := assert.NewAssertion(model, observer)
+
+// Validar furos
+a.Holes().ShouldHaveCount(3)
+a.Holes().AtIndex(0).ShouldHaveDepth(10.0, 0.01)
+a.Holes().AtIndex(0).ShouldBeBlindHole()
+
+// Validar ranhuras
+a.Slots().ShouldHaveCount(2)
+a.Slots().AtIndex(0).ShouldHaveLength(50.0, 0.1)
+
+// Validar contornos
+a.Contours().ShouldHaveCount(1)
+a.Contours().AtIndex(0).ShouldBeClockwise()
+
+// Validar máquina
+a.Machine().ShouldBeAtPosition(0, 0, 5.0, 0.01)
+a.Machine().SpindleShouldBe(false)
+```
+
+### 5. Snapshots (`pkg/snapshot`)
+Sistema de snapshots determinísticos para testes.
+
+```go
+observer := assert.NewTestObserver(t)
+defer observer.SaveSnapshot() // Salva automaticamente ao final
+
+// Em CI/CD, use:
+// go test ./... -update  # Para atualizar snapshots
+```
+
+### 6. UI Visualization (`pkg/ui`)
+Interface web 3D para debug visual (opcional).
+
+```go
+// Programaticamente
+ui := ui.NewViewer(config)
+ui.ShowModel(model, events)
+
+// Ou via CLI
+// gocodecheck --ui examples/basic_holes/main_test.go
+```
+
+## Estrutura de Stock/Workpiece
+
+O workpiece representa a peça bruta sendo usinada:
+
+```go
+model := machining.NewMachiningModel().
+    WithStock(
+        100,  // width (mm)
+        100,  // height (mm)
+        10,   // depth (mm)
+        machining.Position{X: 0, Y: 0, Z: -10}, // position
+    )
+```
+
+**Convenção de coordenadas:**
+- **Z=0**: Topo da peça (superfície)
+- **Z negativo**: Dentro da peça (cortando)
+- **Position.Z**: Base da peça (底部)
+
+**Métodos úteis:**
+```go
+stock.TopZ()          // Retorna Z=0 (topo)
+stock.BottomZ()       // Retorna Position.Z (base)
+stock.Contains(x, y, z) // Verifica se ponto está dentro
+stock.IsPassThrough(depth) // Verifica se furo atravessa
+stock.IsBlindHole(depth)   // Verifica se furo é cego
+```
+
+## Estrutura de Ferramentas
+
+Configure ferramentas específicas por número:
+
+```go
+model := machining.NewMachiningModel().
+    WithTool(1, 6.0, 25.0, machining.EndMill).     // T1: Fresa 6mm
+    WithTool(2, 10.0, 30.0, machining.EndMill).    // T2: Fresa 10mm
+    WithTool(3, 3.0, 20.0, machining.BallNose).    // T3: Esférica 3mm
+```
+
+**Atalhos:**
+```go
+model.WithEndMill(1, 6.0, 25.0)    // EndMill
+model.WithBallNose(2, 3.0, 20.0)   // BallNose
+```
+
+**Fallback padrão:** Se nenhuma ferramenta for configurada, usa EndMill 6mm.
+
+## Padrões de Uso
+
+### 1. Teste Unitário Simples
+
+```go
+func TestSimpleDrill(t *testing.T) {
+    gcode := `G90 G21
+              G00 X10 Y10 Z5
+              G01 Z-10 F100
+              G00 Z5`
+    
+    p := parser.NewParser()
+    instructions, _ := p.Parse(gcode)
+    
+    interp := interpreter.NewInterpreter()
+    events, _ := interp.Interpret(instructions)
+    
+    model := machining.NewMachiningModel().
+        WithStock(100, 100, 20, machining.Position{Z: -20}).
+        Analyze(events)
+    
+    observer := assert.NewTestObserver(t)
+    defer observer.SaveSnapshot()
+    
+    a := assert.NewAssertion(model, observer)
+    a.Holes().ShouldHaveCount(1)
+    a.Holes().AtIndex(0).ShouldHaveDepth(10.0, 0.01)
+}
+```
+
+### 2. Teste com Múltiplas Ferramentas
+
+```go
+func TestMultiTool(t *testing.T) {
+    gcode := `G90 G21
+              T1 M06    ; Fresa 6mm
+              G00 X10 Y10
+              G01 Z-5 F100
+              G00 Z5
+              T2 M06    ; Fresa 10mm
+              G00 X20 Y20
+              G01 Z-8 F100
+              G00 Z5`
+    
+    model := machining.NewMachiningModel().
+        WithStock(100, 100, 10, machining.Position{Z: -10}).
+        WithEndMill(1, 6.0, 25.0).
+        WithEndMill(2, 10.0, 30.0).
+        Analyze(events)
+    
+    a := assert.NewAssertion(model, observer)
+    a.Holes().ShouldHaveCount(2)
+    // Primeiro furo com T1 (6mm)
+    a.Holes().AtIndex(0).ShouldHaveDepth(5.0, 0.01)
+    // Segundo furo com T2 (10mm)
+    a.Holes().AtIndex(1).ShouldHaveDepth(8.0, 0.01)
+}
+```
+
+### 3. Teste com Snapshot
+
+```go
+func TestComplexPart(t *testing.T) {
+    gcode := readGCodeFile("part.nc")
+    
+    // ... parse, interpret, analyze
+    
+    observer := assert.NewTestObserver(t)
+    defer observer.SaveSnapshot() // Salva snapshot automaticamente
+    
+    a := assert.NewAssertion(model, observer)
+    a.Holes().ShouldHaveCount(5)
+    a.Slots().ShouldHaveCount(2)
+    a.Contours().ShouldHaveCount(1)
+}
+```
+
+### 4. Debug com UI
+
+```go
+func TestWithUI(t *testing.T) {
+    // ... parse, interpret, analyze
+    
+    // Visualizar no navegador (opcional)
+    ui := ui.NewViewer(&ui.Config{Port: 4000})
+    ui.ShowModel(model, events)
+    
+    // Ou via CLI:
+    // gocodecheck --ui examples/basic_holes/main_test.go
+}
+```
+
+## CLI - gocodecheck
+
+### Comandos
+
+```bash
+# Executar com UI de visualização 3D
+gocodecheck --ui <test_file.go>
+
+# Executar e mostrar eventos detalhados
+gocodecheck --events <test_file.go>
+
+# Executar teste headless (padrão)
+gocodecheck <test_file.go>
+
+# Atualizar snapshots
+go test ./examples/... -update
+```
+
+### Flags
+
+- `--ui` - Abre interface web 3D para visualização (porta 4000)
+- `--events` - Mostra eventos de interpretação detalhados
+- `--port=<num>` - Define porta da UI (padrão: 4000)
+- `--config=<file>` - Arquivo de configuração customizado
+
+## Arquitetura
+
+```
+┌─────────────┐
+│   G-Code    │
+└──────┬──────┘
+       │ parse
+       ▼
+┌─────────────┐
+│Instructions │
+└──────┬──────┘
+       │ interpret
+       ▼
+┌─────────────┐
+│   Events    │
+└──────┬──────┘
+       │ analyze
+       ▼
+┌─────────────┐
+│   Model     │ ◄──── Assert
+└──────┬──────┘       (validações)
+       │
+       ├─────► Snapshot (testes)
+       │
+       └─────► UI (visual debug)
+```
+
+## Integração CI/CD
+
+### GitHub Actions
+
+```yaml
+name: G-Code Tests
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+      
+      - name: Run G-Code Tests
+        run: go test ./examples/...
+      
+      - name: Check Snapshots
+        run: |
+          go test ./examples/... -update
+          git diff --exit-code snapshots/
+```
+
+## Exemplos Completos
+
+Veja os exemplos em `/examples`:
+
+- `basic_holes/` - Furos simples
+- `slots_and_contours/` - Ranhuras e contornos
+- `complete_part/` - Peça complexa com múltiplas operações
+
+## Links Úteis
+
+- **Documentação Completa**: [docs/USAGE_GUIDE.md](docs/USAGE_GUIDE.md)
+- **Roadmap**: [ROADMAP.md](ROADMAP.md)
+- **Repositório**: https://github.com/eduardotorresdev/gocode-check
+- **Issues**: https://github.com/eduardotorresdev/gocode-check/issues
+
+## Licença
+
+MIT License - veja [LICENSE](LICENSE) para detalhes.

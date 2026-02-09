@@ -6,6 +6,10 @@ type MachiningModel struct {
 	// Stock is the raw workpiece being machined (optional).
 	Stock *Stock
 
+	// Tools is a map of tool number to Tool configuration.
+	// If a tool is used but not configured, DefaultTool() is used.
+	Tools map[int]*Tool
+
 	// Holes contains all detected hole features.
 	Holes []Hole
 
@@ -19,6 +23,7 @@ type MachiningModel struct {
 // NewMachiningModel creates a new empty MachiningModel.
 func NewMachiningModel() *MachiningModel {
 	return &MachiningModel{
+		Tools:    make(map[int]*Tool),
 		Holes:    make([]Hole, 0),
 		Slots:    make([]Slot, 0),
 		Contours: make([]Contour, 0),
@@ -42,6 +47,43 @@ func (m *MachiningModel) WithStockAt(width, height, depth, x, y, z float64) *Mac
 // HasStock returns true if a stock is defined.
 func (m *MachiningModel) HasStock() bool {
 	return m.Stock != nil
+}
+
+// WithTool configures a tool in the model.
+// Returns the model for method chaining.
+func (m *MachiningModel) WithTool(number int, diameter, fluteLength float64, toolType ToolType) *MachiningModel {
+	m.Tools[number] = NewTool(number, diameter, fluteLength, toolType)
+	return m
+}
+
+// WithEndMill is a convenience method to configure an end mill tool.
+// Returns the model for method chaining.
+func (m *MachiningModel) WithEndMill(number int, diameter, fluteLength float64) *MachiningModel {
+	return m.WithTool(number, diameter, fluteLength, ToolTypeEndMill)
+}
+
+// WithBallNose is a convenience method to configure a ball-nose tool.
+// Returns the model for method chaining.
+func (m *MachiningModel) WithBallNose(number int, diameter, fluteLength float64) *MachiningModel {
+	return m.WithTool(number, diameter, fluteLength, ToolTypeBallNose)
+}
+
+// GetTool returns the tool configuration for a given tool number.
+// If the tool is not configured, returns DefaultTool().
+func (m *MachiningModel) GetTool(number int) *Tool {
+	if tool, ok := m.Tools[number]; ok {
+		return tool
+	}
+	// Return default tool with the requested number
+	defaultTool := DefaultTool()
+	defaultTool.Number = number
+	return defaultTool
+}
+
+// HasTool returns true if a specific tool is configured.
+func (m *MachiningModel) HasTool(number int) bool {
+	_, ok := m.Tools[number]
+	return ok
 }
 
 // AddHole adds a hole to the model.

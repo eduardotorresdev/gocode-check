@@ -56,7 +56,9 @@ M30         ; Program end
 		t.Fatalf("parse error: %v", err)
 	}
 
+	// Configure model with 6mm end mill
 	model, _ := machining.Analyze(trace)
+	model = model.WithEndMill(1, 6.0, 25.0)
 
 	// Validate the hole exists at expected position
 	_ = assert.Expect(trace, model).
@@ -95,8 +97,11 @@ M30
 	}
 
 	// Define stock: 200mm wide, 100mm tall, 15mm thick
+	// Configure T1 as 6mm end mill
 	model, _ := machining.Analyze(trace)
-	model = model.WithStock(200, 100, 15)
+	model = model.
+		WithStock(200, 100, 15).
+		WithEndMill(1, 6.0, 25.0)
 
 	// Validate through hole - should pass through the stock
 	_ = assert.Expect(trace, model).

@@ -108,10 +108,14 @@ func (o *uiObserver) OnAssert(ctx assert.AssertContext) {
 	// Log test start
 	o.viewer.logger.TestStart(ctx.TestName)
 
-	// Get stock from model if available
+	// Get stock and tools from model if available
 	var stock *machining.Stock
+	var tools map[int]*machining.Tool
 	if ctx.Model != nil {
 		stock = ctx.Model.Stock
+		if len(ctx.Model.Tools) > 0 {
+			tools = ctx.Model.Tools
+		}
 	}
 
 	// Broadcast session start
@@ -124,6 +128,7 @@ func (o *uiObserver) OnAssert(ctx assert.AssertContext) {
 			TotalEvents:       o.currentTotalSteps,
 			TotalExpectations: len(ctx.Results),
 			Stock:             stock,
+			Tools:             tools,
 		},
 	})
 

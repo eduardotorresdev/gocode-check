@@ -103,8 +103,8 @@
         
       case 'session_start':
         // Create new session tab - this becomes the receiving session
-        // Pass the stock if defined
-        sessions.create(msg.data.testName, msg.data.suiteName, msg.data.suiteId, msg.data.stock);
+        // Pass the stock and tools if defined
+        sessions.create(msg.data.testName, msg.data.suiteName, msg.data.suiteId, msg.data.stock, msg.data.tools);
         break;
         
       case 'expectation':

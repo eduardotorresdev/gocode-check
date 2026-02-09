@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Run tests
+        run: go test -v ./...
+
+      - name: Build binaries
+        run: |
+          # Linux AMD64
+          GOOS=linux GOARCH=amd64 go build -o gocodecheck-linux-amd64 ./cmd/gocodecheck
+          
+          # Linux ARM64
+          GOOS=linux GOARCH=arm64 go build -o gocodecheck-linux-arm64 ./cmd/gocodecheck
+          
+          # macOS AMD64
+          GOOS=darwin GOARCH=amd64 go build -o gocodecheck-darwin-amd64 ./cmd/gocodecheck
+          
+          # macOS ARM64 (Apple Silicon)
+          GOOS=darwin GOARCH=arm64 go build -o gocodecheck-darwin-arm64 ./cmd/gocodecheck
+          
+          # Windows AMD64
+          GOOS=windows GOARCH=amd64 go build -o gocodecheck-windows-amd64.exe ./cmd/gocodecheck
+
+      - name: Generate checksums
+        run: |
+          sha256sum gocodecheck-* > checksums.txt
+
+      - name: Extract version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --pretty=format:"- %s" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ steps.get_version.outputs.VERSION }}
+          body: |
+            ## Changes in ${{ steps.get_version.outputs.VERSION }}
+            
+            ${{ steps.changelog.outputs.CHANGELOG }}
+            
+            ## Installation
+            
+            ### Using Go install
+            ```bash
+            go install github.com/eduardotorresdev/gocode-check/cmd/gocodecheck@${{ steps.get_version.outputs.VERSION }}
+            ```
+            
+            ### Download binary
+            Download the binary for your platform below and add it to your PATH.
+            
+            ## Checksums
+            See `checksums.txt` for SHA256 checksums of all binaries.
+          files: |
+            gocodecheck-linux-amd64
+            gocodecheck-linux-arm64
+            gocodecheck-darwin-amd64
+            gocodecheck-darwin-arm64
+            gocodecheck-windows-amd64.exe
+            checksums.txt
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

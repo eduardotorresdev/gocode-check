@@ -7,19 +7,17 @@
   
   let container;
   let scene, camera, renderer, controls;
-  let toolPathWorking = null; // Green path for cutting operations
-  let toolPathMoving = null;  // Red path for rapid moves
+  let toolPathCutting = null; // Red path for cutting operations (inside workpiece)
+  let toolPathRapid = null;   // Green path for rapid moves (outside workpiece)
   let toolMesh = null;
   let toolBit = null;
   let toolGlow = null;  // Glow effect at tool tip
   let gridHelper = null;
   let workpiece = null;
-  let cutMarks = null;
   let drillHoles = [];
   let animationId = null;
   let toolRotation = 0;
   let lastToolPathLength = 0;
-  let cutMaterial = null;
   
   // Scale configuration: 3m view width
   const VIEW_WIDTH = 3000; // 3000mm = 3m
@@ -42,7 +40,6 @@
     window.removeEventListener('resize', onResize);
     if (animationId) cancelAnimationFrame(animationId);
     if (controls) controls.dispose();
-    if (cutMaterial) cutMaterial.dispose();
     if (renderer) renderer.dispose();
   });
   
@@ -106,22 +103,11 @@
     const axesHelper = new THREE.AxesHelper(300);
     scene.add(axesHelper);
     
-    // Workpiece (on XY plane, Z down) - black color
+    // Workpiece (on XY plane, Z down) - wood colored when stock defined
     createWorkpiece();
     
     // Milling cutter tool (above workpiece, Z positive)
     createMillingTool();
-    
-    // Cut marks container
-    cutMarks = new THREE.Group();
-    scene.add(cutMarks);
-    
-    // Pre-create cut material (red for material removal)
-    cutMaterial = new THREE.MeshBasicMaterial({
-      color: 0xcc3333, // Red to indicate material removal
-      transparent: true,
-      opacity: 0.85,
-    });
   }
   
   function createWorkpiece(stock = null) {
@@ -186,6 +172,14 @@
   }
   
   function createMillingTool() {
+    // Get current tool configuration from session
+    const currentToolConfig = sessions.currentTool;
+    const diameter = currentToolConfig?.Diameter ?? 6.0;
+    const fluteLength = currentToolConfig?.FluteLength ?? 25.0;
+    const toolType = currentToolConfig?.Type ?? 'EndMill';
+    
+    console.log('[Tool] Creating milling tool:', { diameter, fluteLength, toolType });
+    
     // Tool holder group
     const holderGroup = new THREE.Group();
     
@@ -213,8 +207,10 @@
     plate.position.z = 38;
     holderGroup.add(plate);
     
-    // Collet/shaft housing
-    const colletGeometry = new THREE.CylinderGeometry(10, 12, 15, 16);
+    // Collet/shaft housing (adapts to tool shank diameter)
+    const colletOuterRadius = Math.max(10, diameter / 2 + 4);
+    const colletInnerRadius = Math.max(8, diameter / 2 + 2);
+    const colletGeometry = new THREE.CylinderGeometry(colletInnerRadius, colletOuterRadius, 15, 16);
     const colletMaterial = new THREE.MeshStandardMaterial({
       color: 0x888888,
       metalness: 0.9,
@@ -226,10 +222,13 @@
     holderGroup.add(collet);
     
     // Milling bit group (the rotating part)
+    // Built so that the cutting tool TIP is at Z=0 in bitGroup coordinates
     const bitGroup = new THREE.Group();
     
-    // Shank (connection between collet and cutter)
-    const shankGeometry = new THREE.CylinderGeometry(5, 5, 20, 16);
+    // Shank (connection between collet and cutter) - matches tool diameter
+    const shankRadius = diameter / 2;
+    const shankLength = 20;
+    const shankGeometry = new THREE.CylinderGeometry(shankRadius, shankRadius, shankLength, 16);
     const shankMaterial = new THREE.MeshStandardMaterial({
       color: 0xCCCCCC,
       metalness: 0.9,
@@ -237,83 +236,23 @@
     });
     const shank = new THREE.Mesh(shankGeometry, shankMaterial);
     shank.rotation.x = Math.PI / 2; // Align with Z axis
-    shank.position.z = 10;
+    shank.position.z = fluteLength + shankLength / 2; // Above the cutting tool
     bitGroup.add(shank);
     
-    // Candy cane milling cutter (red and white spiral stripes)
-    const cutterRadius = 8;
-    const cutterHeight = 35;
-    const numStripes = 8; // Number of spiral stripes
+    // Cutting tool (flutes) - realistic end mill or ball nose
+    // This will place its TIP at bitGroup's Z=0
+    createCuttingTool(bitGroup, diameter, fluteLength, toolType);
     
-    // Create the candy cane pattern with alternating red and white segments
-    const cutterGroup = new THREE.Group();
-    
-    // Create spiral stripes around the cylinder
-    for (let i = 0; i < numStripes; i++) {
-      const isRed = i % 2 === 0;
-      const segmentAngle = (Math.PI * 2) / numStripes;
-      
-      // Create a segment of the cylinder using custom geometry
-      const segmentGeometry = new THREE.CylinderGeometry(
-        cutterRadius, cutterRadius, cutterHeight, 8, 8, false,
-        i * segmentAngle, segmentAngle
-      );
-      
-      const segmentMaterial = new THREE.MeshStandardMaterial({
-        color: isRed ? 0xcc2222 : 0xffffff,
-        metalness: 0.5,
-        roughness: 0.4,
-        side: THREE.DoubleSide,
-      });
-      
-      const segment = new THREE.Mesh(segmentGeometry, segmentMaterial);
-      cutterGroup.add(segment);
-    }
-    
-    // Add top and bottom caps
-    const capGeometry = new THREE.CircleGeometry(cutterRadius, 32);
-    const capMaterial = new THREE.MeshStandardMaterial({
-      color: 0xdddddd,
-      metalness: 0.6,
-      roughness: 0.3,
-    });
-    
-    const topCap = new THREE.Mesh(capGeometry, capMaterial);
-    topCap.position.y = cutterHeight / 2;
-    topCap.rotation.x = -Math.PI / 2;
-    cutterGroup.add(topCap);
-    
-    const bottomCap = new THREE.Mesh(capGeometry, capMaterial);
-    bottomCap.position.y = -cutterHeight / 2;
-    bottomCap.rotation.x = Math.PI / 2;
-    cutterGroup.add(bottomCap);
-    
-    // Rotate the cutter group to align with Z axis
-    cutterGroup.rotation.x = Math.PI / 2;
-    cutterGroup.position.z = -20;
-    bitGroup.add(cutterGroup);
-    
-    // Flat end tip (typical for end mill)
-    const tipGeometry = new THREE.CylinderGeometry(cutterRadius - 1, cutterRadius, 3, 16);
-    const tipMaterial = new THREE.MeshStandardMaterial({
-      color: 0xaaaaaa,
-      metalness: 0.8,
-      roughness: 0.2,
-    });
-    const tip = new THREE.Mesh(tipGeometry, tipMaterial);
-    tip.rotation.x = Math.PI / 2;
-    tip.position.z = -39;
-    bitGroup.add(tip);
-    
-    // Glow effect at the tool tip
-    const glowGeometry = new THREE.SphereGeometry(12, 16, 16);
+    // Glow effect at the tool tip (tip is at Z=0 in local coordinates)
+    const glowRadius = diameter * 1.5;
+    const glowGeometry = new THREE.SphereGeometry(glowRadius, 16, 16);
     const glowMaterial = new THREE.MeshBasicMaterial({
       color: 0x00ffff,
       transparent: true,
       opacity: 0.6,
     });
     toolGlow = new THREE.Mesh(glowGeometry, glowMaterial);
-    toolGlow.position.z = -45; // At the tip
+    toolGlow.position.z = 0; // At the tip (local Z=0)
     bitGroup.add(toolGlow);
     
     toolBit = bitGroup;
@@ -322,6 +261,108 @@
     toolMesh = holderGroup;
     toolMesh.castShadow = true;
     scene.add(toolMesh);
+  }
+  
+  function createCuttingTool(parent, diameter, fluteLength, toolType) {
+    const radius = diameter / 2;
+    const numFlutes = 4; // 4-flute end mill is standard
+    const fluteDepth = radius * 0.15; // Flute depth is ~15% of radius
+    
+    // All cutting tools are built so that the TIP is at Z=0 in local coordinates
+    // This makes alignment with G-code positions trivial
+    
+    if (toolType === 'EndMill') {
+      // Create end mill with visible flutes
+      const cutterGroup = new THREE.Group();
+      
+      // Main cutter body (extends from tip at Z=0 to Z=fluteLength)
+      const bodyGeometry = new THREE.CylinderGeometry(radius, radius, fluteLength, 32);
+      const bodyMaterial = new THREE.MeshStandardMaterial({
+        color: 0xDDDDDD,
+        metalness: 0.9,
+        roughness: 0.15,
+      });
+      const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+      body.rotation.x = Math.PI / 2;
+      body.position.z = fluteLength / 2; // Center of cylinder at midpoint
+      cutterGroup.add(body);
+      
+      // Create flutes (helical grooves)
+      for (let i = 0; i < numFlutes; i++) {
+        const fluteAngle = (Math.PI * 2 * i) / numFlutes;
+        const fluteGeometry = createFluteGeometry(radius, fluteLength, fluteDepth, fluteAngle);
+        const fluteMaterial = new THREE.MeshStandardMaterial({
+          color: 0x999999,
+          metalness: 0.8,
+          roughness: 0.3,
+        });
+        const flute = new THREE.Mesh(fluteGeometry, fluteMaterial);
+        flute.rotation.x = Math.PI / 2;
+        flute.position.z = fluteLength / 2; // Align with body
+        cutterGroup.add(flute);
+      }
+      
+      // Flat bottom tip at Z=0 (end mill characteristic)
+      const tipGeometry = new THREE.CircleGeometry(radius, 32);
+      const tipMaterial = new THREE.MeshStandardMaterial({
+        color: 0xBBBBBB,
+        metalness: 0.85,
+        roughness: 0.2,
+      });
+      const tip = new THREE.Mesh(tipGeometry, tipMaterial);
+      tip.rotation.x = -Math.PI / 2;
+      tip.position.z = 0; // Tip exactly at Z=0
+      cutterGroup.add(tip);
+      
+      // Position cutter group so tip is at parent's Z=0
+      cutterGroup.position.z = 0;
+      parent.add(cutterGroup);
+      
+    } else if (toolType === 'BallNose') {
+      // Create ball nose end mill
+      const cutterGroup = new THREE.Group();
+      
+      // Main cutter body (extends from Z=0 to Z=fluteLength)
+      const bodyGeometry = new THREE.CylinderGeometry(radius, radius, fluteLength - radius, 32);
+      const bodyMaterial = new THREE.MeshStandardMaterial({
+        color: 0xDDDDDD,
+        metalness: 0.9,
+        roughness: 0.15,
+      });
+      const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+      body.rotation.x = Math.PI / 2;
+      body.position.z = radius + (fluteLength - radius) / 2; // Starts at Z=radius
+      cutterGroup.add(body);
+      
+      // Ball nose tip (hemisphere at Z=0)
+      const tipGeometry = new THREE.SphereGeometry(radius, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+      const tipMaterial = new THREE.MeshStandardMaterial({
+        color: 0xBBBBBB,
+        metalness: 0.85,
+        roughness: 0.2,
+      });
+      const tip = new THREE.Mesh(tipGeometry, tipMaterial);
+      tip.rotation.x = Math.PI;
+      tip.position.z = 0; // Tip at Z=0
+      cutterGroup.add(tip);
+      
+      // Position cutter group so tip is at parent's Z=0
+      cutterGroup.position.z = 0;
+      parent.add(cutterGroup);
+    }
+  }
+  
+  function createFluteGeometry(radius, length, depth, startAngle) {
+    // Create a simple flute groove as a thin box
+    const fluteWidth = radius * 0.3;
+    const fluteGeometry = new THREE.BoxGeometry(fluteWidth, depth, length);
+    
+    // Position it at the edge of the cutter
+    const geometry = fluteGeometry.clone();
+    geometry.translate((radius - depth / 2), 0, 0);
+    geometry.rotateZ(startAngle);
+    
+    return geometry;
   }
   
   function onResize() {
@@ -342,10 +383,12 @@
     
     // Update tool position
     if (toolMesh && machine.position) {
+      // Position tool tip exactly at the G-code position
+      // The tool is built with the tip at a specific offset below the holder
       toolMesh.position.set(
         machine.position.X ?? 0,
         machine.position.Y ?? 0,
-        (machine.position.Z ?? 0) + 100 // Offset for tool holder
+        machine.position.Z ?? 0 // Tip exactly at Z coordinate
       );
       
       // Rotate the tool bit when spindle is on AND flow is not paused (playing or stepping)
@@ -363,9 +406,8 @@
       }
     }
     
-    // Update tool path and cut marks
+    // Update tool path visualization
     updateToolPath();
-    updateCutMarks();
     
     renderer.render(scene, camera);
   }
@@ -374,20 +416,21 @@
     // Get tool path from active session
     const path = sessions.toolPath;
     const currentIndex = sessions.currentIndex;
+    const stock = sessions.stock;
     
     // Remove old paths if session changed or path significantly changed
-    if ((toolPathWorking || toolPathMoving) && (path.length < lastToolPathLength || path.length === 0)) {
-      if (toolPathWorking) {
-        scene.remove(toolPathWorking);
-        toolPathWorking.geometry.dispose();
-        toolPathWorking.material.dispose();
-        toolPathWorking = null;
+    if ((toolPathCutting || toolPathRapid) && (path.length < lastToolPathLength || path.length === 0)) {
+      if (toolPathCutting) {
+        scene.remove(toolPathCutting);
+        toolPathCutting.geometry.dispose();
+        toolPathCutting.material.dispose();
+        toolPathCutting = null;
       }
-      if (toolPathMoving) {
-        scene.remove(toolPathMoving);
-        toolPathMoving.geometry.dispose();
-        toolPathMoving.material.dispose();
-        toolPathMoving = null;
+      if (toolPathRapid) {
+        scene.remove(toolPathRapid);
+        toolPathRapid.geometry.dispose();
+        toolPathRapid.material.dispose();
+        toolPathRapid = null;
       }
       lastToolPathLength = 0;
     }
@@ -397,28 +440,45 @@
       return;
     }
     
-    // Only update if path changed - check if any path exists to update
+    // Only update if path changed
     if (path.length === lastToolPathLength) {
       return;
     }
     
     // Remove old paths
-    if (toolPathWorking) {
-      scene.remove(toolPathWorking);
-      toolPathWorking.geometry.dispose();
-      toolPathWorking.material.dispose();
-      toolPathWorking = null;
+    if (toolPathCutting) {
+      scene.remove(toolPathCutting);
+      toolPathCutting.geometry.dispose();
+      toolPathCutting.material.dispose();
+      toolPathCutting = null;
     }
-    if (toolPathMoving) {
-      scene.remove(toolPathMoving);
-      toolPathMoving.geometry.dispose();
-      toolPathMoving.material.dispose();
-      toolPathMoving = null;
+    if (toolPathRapid) {
+      scene.remove(toolPathRapid);
+      toolPathRapid.geometry.dispose();
+      toolPathRapid.material.dispose();
+      toolPathRapid = null;
     }
     
-    // Separate points for working and moving paths
-    const workingSegments = [];
-    const movingSegments = [];
+    // Helper function to check if a point is inside workpiece
+    const isInsideWorkpiece = (point) => {
+      if (!stock) return false;
+      
+      const minX = stock.position?.X ?? 0;
+      const minY = stock.position?.Y ?? 0;
+      const bottomZ = stock.position?.Z ?? -stock.depth;
+      const topZ = bottomZ + stock.depth;
+      
+      const maxX = minX + stock.width;
+      const maxY = minY + stock.height;
+      
+      return point.x >= minX && point.x <= maxX &&
+             point.y >= minY && point.y <= maxY &&
+             point.z >= bottomZ && point.z <= topZ;
+    };
+    
+    // Separate points for cutting (inside workpiece) and rapid (outside workpiece) paths
+    const cuttingSegments = [];
+    const rapidSegments = [];
     
     for (let i = 1; i < path.length; i++) {
       const prev = path[i - 1];
@@ -433,142 +493,68 @@
         isPast
       };
       
-      if (curr.isCut) {
-        workingSegments.push(segment);
+      // Check if segment is inside workpiece (both points inside)
+      const prevInside = isInsideWorkpiece({ x: prev.x, y: prev.y, z: prev.z });
+      const currInside = isInsideWorkpiece({ x: curr.x, y: curr.y, z: curr.z });
+      
+      if (prevInside || currInside) {
+        // At least one point inside = cutting path (RED)
+        cuttingSegments.push(segment);
       } else {
-        movingSegments.push(segment);
+        // Both points outside = rapid path (GREEN)
+        rapidSegments.push(segment);
       }
     }
     
-    // Create working path (green) - separate line object
-    if (workingSegments.length > 0) {
-      const workingPoints = [];
-      const workingColors = [];
-      for (const seg of workingSegments) {
-        workingPoints.push(...seg.points);
-        const greenIntensity = 0.8 * (seg.isPast ? 1.0 : 0.3);
-        // Add green color for both start and end points of segment
-        workingColors.push(0, greenIntensity, 0);
-        workingColors.push(0, greenIntensity, 0);
+    // Create cutting path (RED) - path inside workpiece
+    if (cuttingSegments.length > 0) {
+      const cuttingPoints = [];
+      const cuttingColors = [];
+      for (const seg of cuttingSegments) {
+        cuttingPoints.push(...seg.points);
+        const redIntensity = 0.9 * (seg.isPast ? 1.0 : 0.3);
+        // Red color for both start and end points
+        cuttingColors.push(redIntensity, 0, 0);
+        cuttingColors.push(redIntensity, 0, 0);
       }
       
-      const workingGeometry = new THREE.BufferGeometry().setFromPoints(workingPoints);
-      workingGeometry.setAttribute('color', new THREE.Float32BufferAttribute(workingColors, 3));
+      const cuttingGeometry = new THREE.BufferGeometry().setFromPoints(cuttingPoints);
+      cuttingGeometry.setAttribute('color', new THREE.Float32BufferAttribute(cuttingColors, 3));
       
-      const workingMaterial = new THREE.LineBasicMaterial({ 
+      const cuttingMaterial = new THREE.LineBasicMaterial({ 
         vertexColors: true,
         linewidth: PATH_LINE_WIDTH
       });
       
-      toolPathWorking = new THREE.LineSegments(workingGeometry, workingMaterial);
-      scene.add(toolPathWorking);
+      toolPathCutting = new THREE.LineSegments(cuttingGeometry, cuttingMaterial);
+      scene.add(toolPathCutting);
     }
     
-    // Create moving path (red) - separate line object
-    if (movingSegments.length > 0) {
-      const movingPoints = [];
-      const movingColors = [];
-      for (const seg of movingSegments) {
-        movingPoints.push(...seg.points);
-        const redIntensity = 0.8 * (seg.isPast ? 1.0 : 0.3);
-        // Add red color for both start and end points of segment
-        movingColors.push(redIntensity, 0, 0);
-        movingColors.push(redIntensity, 0, 0);
+    // Create rapid path (GREEN) - path outside workpiece
+    if (rapidSegments.length > 0) {
+      const rapidPoints = [];
+      const rapidColors = [];
+      for (const seg of rapidSegments) {
+        rapidPoints.push(...seg.points);
+        const greenIntensity = 0.9 * (seg.isPast ? 1.0 : 0.3);
+        // Green color for both start and end points
+        rapidColors.push(0, greenIntensity, 0);
+        rapidColors.push(0, greenIntensity, 0);
       }
       
-      const movingGeometry = new THREE.BufferGeometry().setFromPoints(movingPoints);
-      movingGeometry.setAttribute('color', new THREE.Float32BufferAttribute(movingColors, 3));
+      const rapidGeometry = new THREE.BufferGeometry().setFromPoints(rapidPoints);
+      rapidGeometry.setAttribute('color', new THREE.Float32BufferAttribute(rapidColors, 3));
       
-      const movingMaterial = new THREE.LineBasicMaterial({ 
+      const rapidMaterial = new THREE.LineBasicMaterial({ 
         vertexColors: true,
         linewidth: PATH_LINE_WIDTH
       });
       
-      toolPathMoving = new THREE.LineSegments(movingGeometry, movingMaterial);
-      scene.add(toolPathMoving);
+      toolPathRapid = new THREE.LineSegments(rapidGeometry, rapidMaterial);
+      scene.add(toolPathRapid);
     }
     
     lastToolPathLength = path.length;
-  }
-  
-  function updateCutMarks() {
-    const path = sessions.toolPath;
-    const currentIndex = sessions.currentIndex;
-    
-    // Clear cut marks if session changed (path reset)
-    if (path.length < cutMarks.children.length) {
-      while (cutMarks.children.length > 0) {
-        const child = cutMarks.children[0];
-        cutMarks.remove(child);
-        if (child.geometry) child.geometry.dispose();
-      }
-      drillHoles = [];
-    }
-    
-    // Create cut marks for cutting movements up to current index
-    for (let i = cutMarks.children.length; i < path.length && i <= currentIndex + 1; i++) {
-      const p = path[i];
-      const prev = path[i - 1];
-      
-      if (p.isCut && prev && p.z <= 0) {
-        // Create a groove/cut mark
-        if (p.type === 'LinearCut') {
-          createLinearCutMark(prev, p);
-        } else if (p.type === 'DrillCycle') {
-          createDrillHole(p);
-        } else if (p.type === 'ArcCW' || p.type === 'ArcCCW') {
-          // TODO: Implement proper arc rendering with curved paths
-          // For now, render as a straight line between endpoints
-          createLinearCutMark(prev, p);
-        }
-      }
-    }
-  }
-  
-  function createLinearCutMark(from, to) {
-    // Calculate cut path
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const length = Math.sqrt(dx * dx + dy * dy);
-    
-    if (length < 1) return;
-    
-    // Create a groove that shows material removal
-    const cutWidth = 8; // Width of the cut
-    const stockDepth = currentStock?.depth ?? DEFAULT_WORKPIECE_THICKNESS;
-    const cutDepth = Math.min(Math.abs(to.z), stockDepth);
-    
-    const cutGeometry = new THREE.BoxGeometry(length, cutWidth, cutDepth + 1);
-    const cutMark = new THREE.Mesh(cutGeometry, cutMaterial);
-    
-    // Position and rotate
-    cutMark.position.set(
-      (from.x + to.x) / 2,
-      (from.y + to.y) / 2,
-      -cutDepth / 2
-    );
-    cutMark.rotation.z = Math.atan2(dy, dx);
-    
-    cutMarks.add(cutMark);
-  }
-  
-  function createDrillHole(point) {
-    // Use red color for holes (material removal)
-    const holeMaterial = new THREE.MeshBasicMaterial({
-      color: 0xcc3333, // Red to indicate removal
-      transparent: true,
-      opacity: 0.9,
-    });
-    
-    const stockDepth = currentStock?.depth ?? DEFAULT_WORKPIECE_THICKNESS;
-    const depth = Math.min(Math.abs(point.z), stockDepth);
-    const holeGeometry = new THREE.CylinderGeometry(8, 8, depth + 1, 16);
-    const hole = new THREE.Mesh(holeGeometry, holeMaterial);
-    hole.rotation.x = Math.PI / 2; // Align with Z axis (vertical)
-    hole.position.set(point.x, point.y, -depth / 2);
-    
-    cutMarks.add(hole);
-    drillHoles.push(hole);
   }
   
   // Format position value with unit
@@ -592,17 +578,12 @@
   // Reactive getters
   $effect(() => {
     // This effect runs whenever active session changes
-    // Reset cut marks and recreate workpiece when session changes
+    // Recreate workpiece when session changes
     const activeId = sessions.activeId;
     const stock = sessions.stock;
     
     if (activeId && scene) {
-      // Clear all cut marks for fresh render
-      while (cutMarks && cutMarks.children.length > 0) {
-        const child = cutMarks.children[0];
-        cutMarks.remove(child);
-        if (child.geometry) child.geometry.dispose();
-      }
+      // Clear processing state
       drillHoles = [];
       lastToolPathLength = 0;
       
@@ -650,12 +631,12 @@
   
   <div class="path-legend">
     <div class="legend-item">
-      <span class="legend-color working"></span>
-      <span class="legend-text">Cutting (Z ↓)</span>
+      <span class="legend-color cutting"></span>
+      <span class="legend-text">Inside workpiece</span>
     </div>
     <div class="legend-item">
-      <span class="legend-color moving"></span>
-      <span class="legend-text">Rapid (Z ↑)</span>
+      <span class="legend-color rapid"></span>
+      <span class="legend-text">Outside workpiece</span>
     </div>
   </div>
   
@@ -844,12 +825,12 @@
     border-radius: 2px;
   }
   
-  .legend-color.working {
-    background: #00cc00;
+  .legend-color.cutting {
+    background: #cc0000; /* Red for inside workpiece */
   }
   
-  .legend-color.moving {
-    background: #cc0000;
+  .legend-color.rapid {
+    background: #00cc00; /* Green for outside workpiece */
   }
   
   .legend-text {

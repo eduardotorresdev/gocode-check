@@ -90,6 +90,54 @@ func (s *Stock) IsPassThrough(topZ, bottomZ, tolerance float64) bool {
 	return bottomZ <= s.BottomZ()+tolerance
 }
 
+// ToolType represents the type of cutting tool.
+type ToolType string
+
+const (
+	// ToolTypeEndMill is a flat-bottom end mill (most common).
+	ToolTypeEndMill ToolType = "EndMill"
+
+	// ToolTypeBallNose is a ball-nose end mill with hemispherical tip.
+	ToolTypeBallNose ToolType = "BallNose"
+)
+
+// Tool represents a cutting tool (fresa) configuration.
+type Tool struct {
+	// Number is the tool number (e.g., T1, T2).
+	Number int `json:"number"`
+
+	// Diameter is the cutting diameter in mm.
+	Diameter float64 `json:"diameter"`
+
+	// FluteLength is the length of the cutting flutes in mm.
+	// This determines how deep the tool can cut.
+	FluteLength float64 `json:"fluteLength"`
+
+	// Type is the tool geometry type (EndMill or BallNose).
+	Type ToolType `json:"type"`
+}
+
+// DefaultTool returns a default 6mm end mill with 25mm flute length.
+// This is a common size for general CNC work.
+func DefaultTool() *Tool {
+	return &Tool{
+		Number:      0,
+		Diameter:    6.0,
+		FluteLength: 25.0,
+		Type:        ToolTypeEndMill,
+	}
+}
+
+// NewTool creates a new tool with the given parameters.
+func NewTool(number int, diameter, fluteLength float64, toolType ToolType) *Tool {
+	return &Tool{
+		Number:      number,
+		Diameter:    diameter,
+		FluteLength: fluteLength,
+		Type:        toolType,
+	}
+}
+
 // Point2D represents a 2D coordinate in the XY plane.
 type Point2D struct {
 	X float64
