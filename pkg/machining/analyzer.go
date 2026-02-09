@@ -448,47 +448,6 @@ func peckToPeck(event peckEvent) Peck {
 	}
 }
 
-// createHoleFromPlunge creates a Hole from a plunge cut event.
-func (a *Analyzer) createHoleFromPlunge(event interpreter.Event, tool int) *Hole {
-	// Only consider plunges going down (from higher to lower Z)
-	if event.To.Z >= event.From.Z {
-		return nil
-	}
-
-	depth := a.config.WorkpieceTopZ - event.To.Z
-	if depth < a.config.MinHoleDepth {
-		return nil
-	}
-
-	return &Hole{
-		Center:      Point2D{X: event.To.X, Y: event.To.Y},
-		Diameter:    a.config.DefaultToolDiameter,
-		Depth:       depth,
-		TopZ:        a.config.WorkpieceTopZ,
-		BottomZ:     event.To.Z,
-		Tool:        tool,
-		SourceLines: []int{event.SourceLine},
-	}
-}
-
-// createHoleFromDrillCycle creates a Hole from a drill cycle event.
-func (a *Analyzer) createHoleFromDrillCycle(event interpreter.Event, tool int) *Hole {
-	depth := a.config.WorkpieceTopZ - event.To.Z
-	if depth <= a.config.MinHoleDepth {
-		return nil
-	}
-
-	return &Hole{
-		Center:      Point2D{X: event.To.X, Y: event.To.Y},
-		Diameter:    a.config.DefaultToolDiameter,
-		Depth:       depth,
-		TopZ:        a.config.WorkpieceTopZ,
-		BottomZ:     event.To.Z,
-		Tool:        tool,
-		SourceLines: []int{event.SourceLine},
-	}
-}
-
 // createHoleFromArc creates a Hole from a full circle arc event.
 func (a *Analyzer) createHoleFromArc(event interpreter.Event, tool int) *Hole {
 	if event.Arc == nil {
