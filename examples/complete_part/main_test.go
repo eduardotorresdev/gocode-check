@@ -119,7 +119,7 @@ M30             ; Program end
 		// Verify each corner hole
 		_ = assert.Expect(trace, model).
 			HasHole(15, 15).
-			WithDepth(25.0).
+			WithDepth(20.0).
 			Assert(t)
 
 		_ = assert.Expect(trace, model).
@@ -241,7 +241,7 @@ M30
 	// Validate center hole
 	_ = assert.Expect(trace, model).
 		HasHole(0, 0).
-		WithDepth(20.0).
+		WithDepth(15.0).
 		Assert(t)
 
 	// Validate a few bolt holes

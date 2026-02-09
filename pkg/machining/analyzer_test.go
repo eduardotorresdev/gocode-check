@@ -52,8 +52,8 @@ G1 Z-10 F100`
 	if hole.Center.X != 50 || hole.Center.Y != 50 {
 		t.Errorf("expected hole at (50, 50), got (%v, %v)", hole.Center.X, hole.Center.Y)
 	}
-	if hole.Depth != 15 { // From Z5 to Z-10
-		t.Errorf("expected depth 15, got %v", hole.Depth)
+	if hole.Depth != 10 { // From Z0 to Z-10
+		t.Errorf("expected depth 10, got %v", hole.Depth)
 	}
 	if hole.Tool != 1 {
 		t.Errorf("expected tool 1, got %d", hole.Tool)
@@ -96,6 +96,50 @@ G1 Z-5 F100`
 			t.Errorf("hole %d: expected position (%v, %v), got (%v, %v)",
 				i, expected.X, expected.Y, model.Holes[i].Center.X, model.Holes[i].Center.Y)
 		}
+	}
+}
+
+func TestAnalyze_ConsolidatePeckDrilling(t *testing.T) {
+	gcode := `G21
+G90
+T1
+G0 X50 Y50 Z5
+G1 Z-5 F1200
+G0 Z-3
+G1 Z-10 F1200
+G0 Z-8
+G1 Z-15 F1200
+G0 Z-13
+G1 Z-20 F1200
+G0 Z-18
+G1 Z-25 F1200
+G0 Z-23
+G1 Z-30 F1200
+G0 Z5`
+
+	trace, err := interpreter.ParseAndInterpret(gcode)
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+
+	model, _ := Analyze(trace)
+
+	if model.HoleCount() != 1 {
+		t.Fatalf("expected 1 hole, got %d", model.HoleCount())
+	}
+
+	hole := model.Holes[0]
+	if !hole.IsPeckDrilled {
+		t.Error("expected hole to be marked as peck-drilled")
+	}
+	if hole.PeckCount != 6 {
+		t.Errorf("expected 6 pecks, got %d", hole.PeckCount)
+	}
+	if len(hole.Pecks) != 6 {
+		t.Errorf("expected 6 peck entries, got %d", len(hole.Pecks))
+	}
+	if hole.Depth != 30 {
+		t.Errorf("expected depth 30, got %v", hole.Depth)
 	}
 }
 
@@ -336,6 +380,12 @@ func TestDefaultConfig(t *testing.T) {
 	}
 	if config.WorkpieceTopZ != 0 {
 		t.Errorf("expected WorkpieceTopZ 0, got %v", config.WorkpieceTopZ)
+	}
+	if !config.ConsolidatePeckDrilling {
+		t.Errorf("expected ConsolidatePeckDrilling true, got %v", config.ConsolidatePeckDrilling)
+	}
+	if config.PeckDetectionRadius != 0.5 {
+		t.Errorf("expected PeckDetectionRadius 0.5, got %v", config.PeckDetectionRadius)
 	}
 }
 

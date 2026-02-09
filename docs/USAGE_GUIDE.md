@@ -339,6 +339,8 @@ holes6mm := model.HolesWithDiameter(6.0, 0.001)
 // Buscar furos por profundidade
 deepHoles := model.HolesWithDepth(15.0, 0.001)
 
+> **Nota sobre profundidade:** `Hole.Depth` é calculado como `WorkpieceTopZ - BottomZ` (profundidade absoluta abaixo da superfície), não como distância de deslocamento desde o plano de segurança.
+
 // Verificar contornos fechados
 for _, contour := range model.Contours {
     if contour.IsClosed(1e-6) {
@@ -355,6 +357,8 @@ config := machining.AnalyzerConfig{
     MinHoleDepth:        0.1,    // Profundidade mínima para considerar furo
     DefaultToolDiameter: 6.0,    // Diâmetro padrão da ferramenta
     WorkpieceTopZ:       0.0,    // Topo da peça de trabalho
+    ConsolidatePeckDrilling: true, // Unifica ciclos de peck em um único furo
+    PeckDetectionRadius:     0.5,  // Desvio XY máximo para considerar o mesmo furo
 }
 
 model, warnings := machining.AnalyzeWithConfig(trace, config)

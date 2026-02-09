@@ -28,6 +28,8 @@ gocodecheck --events examples/complete_part/main_test.go
 
 ### Como Biblioteca
 
+> **Versão da API:** exemplos abaixo válidos para gocode-check v1.0.1+
+
 ```go
 package main
 
@@ -48,26 +50,30 @@ func TestFuros(t *testing.T) {
     `
     
     // Parse
-    p := parser.NewParser()
-    instructions, _ := p.Parse(gcode)
+    instructions, err := parser.ParseFile(gcode)
+    if err != nil {
+        t.Fatal(err)
+    }
     
     // Interpret
-    interp := interpreter.NewInterpreter()
-    events, _ := interp.Interpret(instructions)
+    trace, err := interpreter.InterpretGCode(instructions)
+    if err != nil {
+        t.Fatal(err)
+    }
     
     // Analyze
-    model := machining.NewMachiningModel().
-        WithStock(100, 100, 10, machining.Position{X: 0, Y: 0, Z: -10}).
-        WithTool(1, 6.0, 25.0, machining.EndMill).
-        Analyze(events)
+    analyzer := machining.NewDefaultAnalyzer()
+    model, warnings := analyzer.Analyze(trace)
+    _ = warnings
+    model = model.WithStock(100, 100, 10).WithEndMill(1, 6.0, 25.0)
     
     // Assert
-    observer := assert.NewTestObserver(t)
-    defer observer.SaveSnapshot()
-    
-    a := assert.NewAssertion(model, observer)
-    a.Holes().ShouldHaveCount(1)
-    a.Holes().AtIndex(0).ShouldHaveDepth(5.0, 0.01)
+    result := assert.Expect(trace, model).
+        HasHole(10, 10).
+        WithDepth(5.0)
+    if result.Failed() {
+        t.Error(result.Error())
+    }
 }
 ```
 
@@ -77,68 +83,69 @@ func TestFuros(t *testing.T) {
 Converte G-code em instruções estruturadas.
 
 ```go
-p := parser.NewParser()
-instructions, err := p.Parse(gcode)
+instructions, err := parser.ParseFile(gcode)
 ```
 
 ### 2. Interpreter (`pkg/interpreter`)
 Simula o comportamento lógico da CNC, gerando eventos de estado.
 
 ```go
-interp := interpreter.NewInterpreter()
-events, err := interp.Interpret(instructions)
+trace, err := interpreter.InterpretGCode(instructions)
 ```
 
 ### 3. Machining Model (`pkg/machining`)
 Analisa eventos e identifica operações de usinagem (furos, ranhuras, contornos).
 
 ```go
-model := machining.NewMachiningModel().
-    WithStock(width, height, depth, position).
-    WithTool(toolNumber, diameter, fluteLength, toolType).
-    Analyze(events)
+analyzer := machining.NewDefaultAnalyzer()
+model, warnings := analyzer.Analyze(trace)
+_ = warnings
+
+model = model.
+    WithStock(width, height, depth).
+    WithTool(toolNumber, diameter, fluteLength, toolType)
 ```
 
 **Tipos de Ferramentas:**
-- `machining.EndMill` - Fresa de topo (ponta plana)
-- `machining.BallNose` - Fresa esférica (ponta arredondada)
+- `machining.ToolTypeEndMill` - Fresa de topo (ponta plana)
+- `machining.ToolTypeBallNose` - Fresa esférica (ponta arredondada)
 
 ### 4. Assertions (`pkg/assert`)
 API fluente para validações de usinagem.
 
 ```go
-observer := assert.NewTestObserver(t)
-defer observer.SaveSnapshot()
-
-a := assert.NewAssertion(model, observer)
+result := assert.Expect(trace, model)
 
 // Validar furos
-a.Holes().ShouldHaveCount(3)
-a.Holes().AtIndex(0).ShouldHaveDepth(10.0, 0.01)
-a.Holes().AtIndex(0).ShouldBeBlindHole()
+result.HasHoleCount(3)
+result.HasHole(10, 10).WithDepth(10.0)
+result.HasHole(10, 10).IsBlindHole()
 
 // Validar ranhuras
-a.Slots().ShouldHaveCount(2)
-a.Slots().AtIndex(0).ShouldHaveLength(50.0, 0.1)
+result.HasSlotCount(2)
+result.HasSlot(0, 0, 50, 0)
 
 // Validar contornos
-a.Contours().ShouldHaveCount(1)
-a.Contours().AtIndex(0).ShouldBeClockwise()
-
-// Validar máquina
-a.Machine().ShouldBeAtPosition(0, 0, 5.0, 0.01)
-a.Machine().SpindleShouldBe(false)
+result.HasContourCount(1)
+result.HasContour().IsClosed()
 ```
 
 ### 5. Snapshots (`pkg/snapshot`)
 Sistema de snapshots determinísticos para testes.
 
 ```go
-observer := assert.NewTestObserver(t)
-defer observer.SaveSnapshot() // Salva automaticamente ao final
-
-// Em CI/CD, use:
-// go test ./... -update  # Para atualizar snapshots
+config := snapshot.DefaultConfig()
+if snapshot.ShouldUpdate() {
+    _ = snapshot.Save(model, "my_test", config)
+} else {
+    result, err := snapshot.Compare(model, "my_test", config)
+    if err != nil {
+        t.Fatal(err)
+    }
+    if !result.Match {
+        t.Fatalf(result.Diff)
+    }
+}
 ```
 
 ### 6. UI Visualization (`pkg/ui`)
@@ -146,8 +153,8 @@ Interface web 3D para debug visual (opcional).
 
 ```go
 // Programaticamente
-ui := ui.NewViewer(config)
-ui.ShowModel(model, events)
+cleanup := ui.Enable(ui.DefaultConfig().WithAutoOpen(true))
+defer cleanup()
 
 // Ou via CLI
 // gocodecheck --ui examples/basic_holes/main_test.go
@@ -159,12 +166,10 @@ O workpiece representa a peça bruta sendo usinada:
 
 ```go
 model := machining.NewMachiningModel().
-    WithStock(
-        100,  // width (mm)
-        100,  // height (mm)
-        10,   // depth (mm)
-        machining.Position{X: 0, Y: 0, Z: -10}, // position
-    )
+    WithStock(100, 100, 10) // width, height, depth
+
+// Posicionar a peça (canto mínimo) se necessário
+model = model.WithStockAt(100, 100, 10, 0, 0, -10)
 ```
 
 **Convenção de coordenadas:**
@@ -174,11 +179,10 @@ model := machining.NewMachiningModel().
 
 **Métodos úteis:**
 ```go
-stock.TopZ()          // Retorna Z=0 (topo)
-stock.BottomZ()       // Retorna Position.Z (base)
+stock.TopZ()            // Retorna Z=0 (topo)
+stock.BottomZ()         // Retorna Position.Z (base)
 stock.Contains(x, y, z) // Verifica se ponto está dentro
 stock.IsPassThrough(depth) // Verifica se furo atravessa
-stock.IsBlindHole(depth)   // Verifica se furo é cego
 ```
 
 ## Estrutura de Ferramentas
@@ -187,9 +191,9 @@ Configure ferramentas específicas por número:
 
 ```go
 model := machining.NewMachiningModel().
-    WithTool(1, 6.0, 25.0, machining.EndMill).     // T1: Fresa 6mm
-    WithTool(2, 10.0, 30.0, machining.EndMill).    // T2: Fresa 10mm
-    WithTool(3, 3.0, 20.0, machining.BallNose).    // T3: Esférica 3mm
+    WithTool(1, 6.0, 25.0, machining.ToolTypeEndMill).     // T1: Fresa 6mm
+    WithTool(2, 10.0, 30.0, machining.ToolTypeEndMill).    // T2: Fresa 10mm
+    WithTool(3, 3.0, 20.0, machining.ToolTypeBallNose).    // T3: Esférica 3mm
 ```
 
 **Atalhos:**
@@ -211,22 +215,26 @@ func TestSimpleDrill(t *testing.T) {
               G01 Z-10 F100
               G00 Z5`
     
-    p := parser.NewParser()
-    instructions, _ := p.Parse(gcode)
+    instructions, err := parser.ParseFile(gcode)
+    if err != nil {
+        t.Fatal(err)
+    }
     
-    interp := interpreter.NewInterpreter()
-    events, _ := interp.Interpret(instructions)
+    trace, err := interpreter.InterpretGCode(instructions)
+    if err != nil {
+        t.Fatal(err)
+    }
     
-    model := machining.NewMachiningModel().
-        WithStock(100, 100, 20, machining.Position{Z: -20}).
-        Analyze(events)
+    model, _ := machining.Analyze(trace)
+    model = model.WithStock(100, 100, 20)
     
-    observer := assert.NewTestObserver(t)
-    defer observer.SaveSnapshot()
-    
-    a := assert.NewAssertion(model, observer)
-    a.Holes().ShouldHaveCount(1)
-    a.Holes().AtIndex(0).ShouldHaveDepth(10.0, 0.01)
+    result := assert.Expect(trace, model).
+        HasHoleCount(1).
+        HasHole(10, 10).
+        WithDepth(10.0)
+    if result.Failed() {
+        t.Error(result.Error())
+    }
 }
 ```
 
@@ -244,18 +252,25 @@ func TestMultiTool(t *testing.T) {
               G01 Z-8 F100
               G00 Z5`
     
-    model := machining.NewMachiningModel().
-        WithStock(100, 100, 10, machining.Position{Z: -10}).
-        WithEndMill(1, 6.0, 25.0).
-        WithEndMill(2, 10.0, 30.0).
-        Analyze(events)
+    trace, err := interpreter.ParseAndInterpret(gcode)
+    if err != nil {
+        t.Fatal(err)
+    }
     
-    a := assert.NewAssertion(model, observer)
-    a.Holes().ShouldHaveCount(2)
+    model, _ := machining.Analyze(trace)
+    model = model.
+        WithStock(100, 100, 10).
+        WithEndMill(1, 6.0, 25.0).
+        WithEndMill(2, 10.0, 30.0)
+    
+    result := assert.Expect(trace, model).HasHoleCount(2)
+    if result.Failed() {
+        t.Error(result.Error())
+    }
     // Primeiro furo com T1 (6mm)
-    a.Holes().AtIndex(0).ShouldHaveDepth(5.0, 0.01)
+    _ = assert.Expect(trace, model).HasHole(10, 10).WithDepth(5.0)
     // Segundo furo com T2 (10mm)
-    a.Holes().AtIndex(1).ShouldHaveDepth(8.0, 0.01)
+    _ = assert.Expect(trace, model).HasHole(20, 20).WithDepth(8.0)
 }
 ```
 
@@ -266,14 +281,8 @@ func TestComplexPart(t *testing.T) {
     gcode := readGCodeFile("part.nc")
     
     // ... parse, interpret, analyze
-    
-    observer := assert.NewTestObserver(t)
-    defer observer.SaveSnapshot() // Salva snapshot automaticamente
-    
-    a := assert.NewAssertion(model, observer)
-    a.Holes().ShouldHaveCount(5)
-    a.Slots().ShouldHaveCount(2)
-    a.Contours().ShouldHaveCount(1)
+
+    snapshot.AssertMatchesSnapshot(t, model, "complex-part")
 }
 ```
 
@@ -284,8 +293,8 @@ func TestWithUI(t *testing.T) {
     // ... parse, interpret, analyze
     
     // Visualizar no navegador (opcional)
-    ui := ui.NewViewer(&ui.Config{Port: 4000})
-    ui.ShowModel(model, events)
+    cleanup := ui.Enable(ui.DefaultConfig().WithAutoOpen(true))
+    defer cleanup()
     
     // Ou via CLI:
     // gocodecheck --ui examples/basic_holes/main_test.go

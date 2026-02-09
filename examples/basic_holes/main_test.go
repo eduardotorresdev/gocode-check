@@ -63,7 +63,7 @@ M30         ; Program end
 	// Validate the hole exists at expected position
 	_ = assert.Expect(trace, model).
 		HasHole(50, 50).
-		WithDepth(15.0). // Z5 to Z-10 = 15mm depth
+		WithDepth(10.0). // Z0 to Z-10 = 10mm depth
 		WithTool(1).
 		Assert(t)
 }
@@ -256,6 +256,6 @@ M30
 	_ = assert.Expect(trace, model).
 		HasHole(100, 100).
 		WithDiameter(6.0).
-		WithDepth(17.0).
+		WithDepth(12.0).
 		Assert(t)
 }

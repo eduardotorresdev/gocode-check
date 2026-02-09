@@ -155,13 +155,13 @@ G1 Z-10 F100`
 
 	trace, model := traceAndModelFromGCode(t, gcode)
 
-	// Depth should be 15 (from Z5 to Z-10)
-	result := Expect(trace, model).HasHole(50, 50).WithDepth(15.0)
+	// Depth should be 10 (from Z0 to Z-10)
+	result := Expect(trace, model).HasHole(50, 50).WithDepth(10.0)
 	if result.Failed() {
-		t.Errorf("expected hole with depth 15.0: %s", result.Error())
+		t.Errorf("expected hole with depth 10.0: %s", result.Error())
 	}
 
-	result = Expect(trace, model).HasHole(50, 50).WithDepth(10.0)
+	result = Expect(trace, model).HasHole(50, 50).WithDepth(15.0)
 	if result.Pass() {
 		t.Error("expected failure for wrong depth")
 	}
@@ -187,6 +187,30 @@ G1 Z-10 F100`
 	}
 }
 
+func TestPeckAssertions(t *testing.T) {
+	gcode := `G21
+G90
+T1
+G0 X50 Y50 Z5
+G1 Z-5 F1200
+G0 Z-3
+G1 Z-10 F1200
+G0 Z-8
+G1 Z-15 F1200
+G0 Z5`
+
+	trace, model := traceAndModelFromGCode(t, gcode)
+
+	result := Expect(trace, model).
+		HasHole(50, 50).
+		IsPeckDrilled().
+		WithPeckCount(3)
+
+	if result.Failed() {
+		t.Errorf("expected peck-drilled hole: %s", result.Error())
+	}
+}
+
 func TestHoleChainedAssertions(t *testing.T) {
 	gcode := `G21
 G90
@@ -200,7 +224,7 @@ G1 Z-10 F100`
 	result := Expect(trace, model).
 		HasHole(50, 50).
 		WithDiameter(6.0).
-		WithDepth(15.0).
+		WithDepth(10.0).
 		WithTool(1)
 
 	if result.Failed() {
@@ -501,7 +525,7 @@ G1 Y0`
 	trace, model := traceAndModelFromGCode(t, gcode)
 
 	result := Expect(trace, model).
-		HasHole(50, 50).WithDepth(15.0).
+		HasHole(50, 50).WithDepth(10.0).
 		And().
 		HasContour().IsClosed()
 
@@ -656,8 +680,8 @@ G1 Z-10 F100`
 
 	// Run the same assertion multiple times
 	for i := 0; i < 10; i++ {
-		result1 := Expect(trace, model).HasHole(50, 50).WithDepth(15.0)
-		result2 := Expect(trace, model).HasHole(50, 50).WithDepth(15.0)
+		result1 := Expect(trace, model).HasHole(50, 50).WithDepth(10.0)
+		result2 := Expect(trace, model).HasHole(50, 50).WithDepth(10.0)
 
 		if result1.Pass() != result2.Pass() {
 			t.Error("assertions should be deterministic")
@@ -771,7 +795,7 @@ G1 Z-10 F100`
 		_ = Expect(trace, model).
 			HasHole(50, 50).
 			WithDiameter(6.0).
-			WithDepth(15.0).
+			WithDepth(10.0).
 			WithTool(1)
 	}
 }

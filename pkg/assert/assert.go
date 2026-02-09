@@ -243,6 +243,62 @@ func (a *Assertion) WithTool(tool int) *Assertion {
 	return a
 }
 
+// IsPeckDrilled filters holes to only those created by peck drilling.
+// Must be called after HasHole() or on a model with filtered holes.
+func (a *Assertion) IsPeckDrilled() *Assertion {
+	if a.filteredHoles == nil {
+		a.addError("IsPeckDrilled must be called after HasHole")
+		return a
+	}
+
+	a.context += ".IsPeckDrilled()"
+
+	var filtered []machining.Hole
+	for _, h := range a.filteredHoles {
+		if h.IsPeckDrilled {
+			filtered = append(filtered, h)
+		}
+	}
+
+	if len(filtered) == 0 {
+		a.addError("no peck-drilled hole found")
+	}
+
+	a.filteredHoles = filtered
+	return a
+}
+
+// WithPeckCount filters holes by peck count.
+// Must be called after HasHole() or on a model with filtered holes.
+func (a *Assertion) WithPeckCount(count int) *Assertion {
+	if a.filteredHoles == nil {
+		a.addError("WithPeckCount must be called after HasHole")
+		return a
+	}
+
+	a.context += fmt.Sprintf(".WithPeckCount(%d)", count)
+
+	var filtered []machining.Hole
+	for _, h := range a.filteredHoles {
+		if h.PeckCount == count {
+			filtered = append(filtered, h)
+		}
+	}
+
+	if len(filtered) == 0 {
+		a.addError("no hole with peck count %d found", count)
+		if len(a.filteredHoles) > 0 {
+			a.errors[len(a.errors)-1] += "\n  Available peck counts:"
+			for _, h := range a.filteredHoles {
+				a.errors[len(a.errors)-1] += fmt.Sprintf(" %d", h.PeckCount)
+			}
+		}
+	}
+
+	a.filteredHoles = filtered
+	return a
+}
+
 // --- Slot Assertions ---
 
 // HasSlot asserts that a slot exists from start to end position.

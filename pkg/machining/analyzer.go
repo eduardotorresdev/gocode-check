@@ -22,15 +22,23 @@ type AnalyzerConfig struct {
 
 	// WorkpieceTopZ is the Z coordinate of the workpiece top surface.
 	WorkpieceTopZ float64
+
+	// ConsolidatePeckDrilling merges peck cycles into a single hole.
+	ConsolidatePeckDrilling bool
+
+	// PeckDetectionRadius is the max XY deviation to treat pecks as the same hole.
+	PeckDetectionRadius float64
 }
 
 // DefaultConfig returns an AnalyzerConfig with sensible defaults.
 func DefaultConfig() AnalyzerConfig {
 	return AnalyzerConfig{
-		Tolerance:           DefaultTolerance,
-		MinHoleDepth:        0.001,
-		DefaultToolDiameter: 6.0, // 6mm default end mill
-		WorkpieceTopZ:       0,
+		Tolerance:               DefaultTolerance,
+		MinHoleDepth:            0.001,
+		DefaultToolDiameter:     6.0, // 6mm default end mill
+		WorkpieceTopZ:           0,
+		ConsolidatePeckDrilling: true,
+		PeckDetectionRadius:     0.5,
 	}
 }
 
@@ -85,6 +93,7 @@ func (a *Analyzer) Analyze(trace *interpreter.ExecutionTrace) (*MachiningModel, 
 func (a *Analyzer) detectHoles(trace *interpreter.ExecutionTrace) {
 	events := trace.Events
 	currentTool := 0
+	peckEvents := make([]peckEvent, 0)
 
 	for _, event := range events {
 		if event.Type == interpreter.EventToolChange {
@@ -95,18 +104,16 @@ func (a *Analyzer) detectHoles(trace *interpreter.ExecutionTrace) {
 		// Look for linear cuts that are purely vertical (Z-only movement)
 		if event.Type == interpreter.EventLinearCut {
 			if a.isPlungeCut(event) {
-				hole := a.createHoleFromPlunge(event, currentTool)
-				if hole != nil {
-					a.model.AddHole(*hole)
+				if peck := a.createPeckEvent(event, currentTool); peck != nil {
+					peckEvents = append(peckEvents, *peck)
 				}
 			}
 		}
 
 		// Also check for drill cycles (if implemented in interpreter)
 		if event.Type == interpreter.EventDrillCycle {
-			hole := a.createHoleFromDrillCycle(event, currentTool)
-			if hole != nil {
-				a.model.AddHole(*hole)
+			if peck := a.createPeckEvent(event, currentTool); peck != nil {
+				peckEvents = append(peckEvents, *peck)
 			}
 		}
 
@@ -137,6 +144,10 @@ func (a *Analyzer) detectHoles(trace *interpreter.ExecutionTrace) {
 				event.SourceLine,
 			))
 		}
+	}
+
+	if len(peckEvents) > 0 {
+		a.addPeckHoles(peckEvents)
 	}
 }
 
@@ -296,6 +307,147 @@ func (a *Analyzer) isCuttingEvent(et interpreter.EventType) bool {
 	}
 }
 
+type peckEvent struct {
+	center     Point2D
+	tool       int
+	startZ     float64
+	endZ       float64
+	sourceLine int
+}
+
+type peckSequence struct {
+	center      Point2D
+	tool        int
+	pecks       []Peck
+	sourceLines []int
+	minBottomZ  float64
+	lastBottomZ float64
+}
+
+func (a *Analyzer) createPeckEvent(event interpreter.Event, tool int) *peckEvent {
+	// Only consider plunges going down (from higher to lower Z)
+	if event.To.Z >= event.From.Z {
+		return nil
+	}
+
+	depth := a.config.WorkpieceTopZ - event.To.Z
+	if depth < a.config.MinHoleDepth {
+		return nil
+	}
+
+	return &peckEvent{
+		center:     Point2D{X: event.To.X, Y: event.To.Y},
+		tool:       tool,
+		startZ:     event.From.Z,
+		endZ:       event.To.Z,
+		sourceLine: event.SourceLine,
+	}
+}
+
+func (a *Analyzer) addPeckHoles(pecks []peckEvent) {
+	if !a.config.ConsolidatePeckDrilling {
+		for _, peck := range pecks {
+			hole := a.holeFromPeckSequence(&peckSequence{
+				center:      peck.center,
+				tool:        peck.tool,
+				pecks:       []Peck{peckToPeck(peck)},
+				sourceLines: []int{peck.sourceLine},
+				minBottomZ:  peck.endZ,
+				lastBottomZ: peck.endZ,
+			})
+			a.model.AddHole(hole)
+		}
+		return
+	}
+
+	var current *peckSequence
+	for _, peck := range pecks {
+		if current == nil {
+			current = &peckSequence{
+				center:      peck.center,
+				tool:        peck.tool,
+				pecks:       []Peck{peckToPeck(peck)},
+				sourceLines: []int{peck.sourceLine},
+				minBottomZ:  peck.endZ,
+				lastBottomZ: peck.endZ,
+			}
+			continue
+		}
+
+		if a.isSamePeckGroup(current, peck) {
+			current.pecks = append(current.pecks, peckToPeck(peck))
+			current.sourceLines = append(current.sourceLines, peck.sourceLine)
+			if peck.endZ < current.minBottomZ {
+				current.minBottomZ = peck.endZ
+			}
+			current.lastBottomZ = peck.endZ
+			continue
+		}
+
+		a.model.AddHole(a.holeFromPeckSequence(current))
+		current = &peckSequence{
+			center:      peck.center,
+			tool:        peck.tool,
+			pecks:       []Peck{peckToPeck(peck)},
+			sourceLines: []int{peck.sourceLine},
+			minBottomZ:  peck.endZ,
+			lastBottomZ: peck.endZ,
+		}
+	}
+
+	if current != nil {
+		a.model.AddHole(a.holeFromPeckSequence(current))
+	}
+}
+
+func (a *Analyzer) isSamePeckGroup(seq *peckSequence, peck peckEvent) bool {
+	if seq.tool != peck.tool {
+		return false
+	}
+	if seq.center.Distance(peck.center) > a.config.PeckDetectionRadius {
+		return false
+	}
+
+	// Require retraction above previous bottom and a deeper next plunge
+	if peck.startZ <= seq.lastBottomZ+a.config.Tolerance {
+		return false
+	}
+	if peck.endZ >= seq.lastBottomZ-a.config.Tolerance {
+		return false
+	}
+
+	return true
+}
+
+func (a *Analyzer) holeFromPeckSequence(seq *peckSequence) Hole {
+	depth := a.config.WorkpieceTopZ - seq.minBottomZ
+	hole := Hole{
+		Center:      seq.center,
+		Diameter:    a.config.DefaultToolDiameter,
+		Depth:       depth,
+		TopZ:        a.config.WorkpieceTopZ,
+		BottomZ:     seq.minBottomZ,
+		Tool:        seq.tool,
+		SourceLines: seq.sourceLines,
+	}
+
+	if len(seq.pecks) > 1 {
+		hole.IsPeckDrilled = true
+		hole.PeckCount = len(seq.pecks)
+		hole.Pecks = seq.pecks
+	}
+
+	return hole
+}
+
+func peckToPeck(event peckEvent) Peck {
+	return Peck{
+		StartZ: event.startZ,
+		EndZ:   event.endZ,
+		Depth:  math.Abs(event.startZ - event.endZ),
+	}
+}
+
 // createHoleFromPlunge creates a Hole from a plunge cut event.
 func (a *Analyzer) createHoleFromPlunge(event interpreter.Event, tool int) *Hole {
 	// Only consider plunges going down (from higher to lower Z)
@@ -303,7 +455,7 @@ func (a *Analyzer) createHoleFromPlunge(event interpreter.Event, tool int) *Hole
 		return nil
 	}
 
-	depth := event.From.Z - event.To.Z
+	depth := a.config.WorkpieceTopZ - event.To.Z
 	if depth < a.config.MinHoleDepth {
 		return nil
 	}
@@ -312,7 +464,7 @@ func (a *Analyzer) createHoleFromPlunge(event interpreter.Event, tool int) *Hole
 		Center:      Point2D{X: event.To.X, Y: event.To.Y},
 		Diameter:    a.config.DefaultToolDiameter,
 		Depth:       depth,
-		TopZ:        event.From.Z,
+		TopZ:        a.config.WorkpieceTopZ,
 		BottomZ:     event.To.Z,
 		Tool:        tool,
 		SourceLines: []int{event.SourceLine},
@@ -321,8 +473,8 @@ func (a *Analyzer) createHoleFromPlunge(event interpreter.Event, tool int) *Hole
 
 // createHoleFromDrillCycle creates a Hole from a drill cycle event.
 func (a *Analyzer) createHoleFromDrillCycle(event interpreter.Event, tool int) *Hole {
-	depth := event.From.Z - event.To.Z
-	if depth <= 0 {
+	depth := a.config.WorkpieceTopZ - event.To.Z
+	if depth <= a.config.MinHoleDepth {
 		return nil
 	}
 
@@ -330,7 +482,7 @@ func (a *Analyzer) createHoleFromDrillCycle(event interpreter.Event, tool int) *
 		Center:      Point2D{X: event.To.X, Y: event.To.Y},
 		Diameter:    a.config.DefaultToolDiameter,
 		Depth:       depth,
-		TopZ:        event.From.Z,
+		TopZ:        a.config.WorkpieceTopZ,
 		BottomZ:     event.To.Z,
 		Tool:        tool,
 		SourceLines: []int{event.SourceLine},

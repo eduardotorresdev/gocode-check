@@ -203,6 +203,27 @@ type Hole struct {
 
 	// SourceLines contains the source line numbers that created this hole.
 	SourceLines []int
+
+	// IsPeckDrilled indicates the hole was created by peck drilling (multiple plunges).
+	IsPeckDrilled bool
+
+	// PeckCount is the number of pecks used to create the hole.
+	PeckCount int
+
+	// Pecks contains details of each peck (if any).
+	Pecks []Peck
+}
+
+// Peck represents a single peck cycle in a peck-drilled hole.
+type Peck struct {
+	// StartZ is the Z position where the peck starts.
+	StartZ float64
+
+	// EndZ is the Z position where the peck ends.
+	EndZ float64
+
+	// Depth is the peck depth (absolute Z travel).
+	Depth float64
 }
 
 // Slot represents a linear groove feature in the workpiece.

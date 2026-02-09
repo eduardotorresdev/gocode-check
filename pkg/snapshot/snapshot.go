@@ -63,12 +63,22 @@ type NormalizedPoint2D struct {
 
 // NormalizedHole is a deterministic hole representation.
 type NormalizedHole struct {
-	Center   NormalizedPoint2D `json:"center"`
-	Diameter float64           `json:"diameter"`
-	Depth    float64           `json:"depth"`
-	TopZ     float64           `json:"topZ"`
-	BottomZ  float64           `json:"bottomZ"`
-	Tool     int               `json:"tool"`
+	Center        NormalizedPoint2D `json:"center"`
+	Diameter      float64           `json:"diameter"`
+	Depth         float64           `json:"depth"`
+	TopZ          float64           `json:"topZ"`
+	BottomZ       float64           `json:"bottomZ"`
+	Tool          int               `json:"tool"`
+	IsPeckDrilled bool              `json:"isPeckDrilled,omitempty"`
+	PeckCount     int               `json:"peckCount,omitempty"`
+	Pecks         []NormalizedPeck  `json:"pecks,omitempty"`
+}
+
+// NormalizedPeck is a deterministic peck representation.
+type NormalizedPeck struct {
+	StartZ float64 `json:"startZ"`
+	EndZ   float64 `json:"endZ"`
+	Depth  float64 `json:"depth"`
 }
 
 // NormalizedSlot is a deterministic slot representation.
@@ -114,7 +124,7 @@ func normalizePoint2D(p machining.Point2D, precision int) NormalizedPoint2D {
 
 // normalizeHole normalizes a Hole.
 func normalizeHole(h machining.Hole, precision int) NormalizedHole {
-	return NormalizedHole{
+	normalized := NormalizedHole{
 		Center:   normalizePoint2D(h.Center, precision),
 		Diameter: roundFloat(h.Diameter, precision),
 		Depth:    roundFloat(h.Depth, precision),
@@ -122,6 +132,23 @@ func normalizeHole(h machining.Hole, precision int) NormalizedHole {
 		BottomZ:  roundFloat(h.BottomZ, precision),
 		Tool:     h.Tool,
 	}
+
+	if h.IsPeckDrilled {
+		normalized.IsPeckDrilled = true
+		normalized.PeckCount = h.PeckCount
+		if len(h.Pecks) > 0 {
+			normalized.Pecks = make([]NormalizedPeck, len(h.Pecks))
+			for i, p := range h.Pecks {
+				normalized.Pecks[i] = NormalizedPeck{
+					StartZ: roundFloat(p.StartZ, precision),
+					EndZ:   roundFloat(p.EndZ, precision),
+					Depth:  roundFloat(p.Depth, precision),
+				}
+			}
+		}
+	}
+
+	return normalized
 }
 
 // normalizeSlot normalizes a Slot.

@@ -158,13 +158,13 @@ reprodutibilidade e segurança para uso em CI/CD.
   - [x] `HasSegmentCount(n)` - Filtrar por quantidade de segmentos
   - [x] `NoOperationOutside(bounds)` - Verificar limites da peça
 - [x] Implementar encadeamento de assertions
-  - [x] `Expect(model).HasHole(50, 50).WithDiameter(6.0)`
+  - [x] `Expect(trace, model).HasHole(50, 50).WithDiameter(6.0)`
   - [x] `And()` - Permitir múltiplas cadeias de assertions
 - [x] Mensagens de erro claras e úteis
   - [x] Contexto completo da cadeia de assertions
   - [x] Lista de valores disponíveis quando falha
 - [x] Suporte a comparações com tolerância configurável
-  - [x] `ExpectWithTolerance(model, tolerance)` para tolerância customizada
+  - [x] `ExpectWithTolerance(trace, model, tolerance)` para tolerância customizada
 - [x] Integração com testing.T
   - [x] `Assert(t)` - Falha com Errorf (continua teste)
   - [x] `AssertFatal(t)` / `Must(t)` - Falha com Fatalf (para teste)
@@ -174,15 +174,15 @@ reprodutibilidade e segurança para uso em CI/CD.
 **Exemplo de uso:**
 ```go
 // Validar que existe um furo de 6mm de diâmetro em (50, 50)
-assert.Expect(model).HasHole(50, 50).WithDiameter(6.0).Assert(t)
+assert.Expect(trace, model).HasHole(50, 50).WithDiameter(6.0).Assert(t)
 
 // Validar que não há operações fora dos limites
 bounds := assert.Bounds{MaxX: 100, MaxY: 100, MinZ: -20, MaxZ: 10}
-assert.Expect(model).NoOperationOutside(bounds).Assert(t)
+assert.Expect(trace, model).NoOperationOutside(bounds).Assert(t)
 
 // Validações encadeadas com And()
-assert.Expect(model).
-    HasHole(50, 50).WithDepth(15.0).
+assert.Expect(trace, model).
+    HasHole(50, 50).WithDepth(10.0).
     And().
     HasContour().IsClosed().
     Assert(t)

@@ -7,7 +7,7 @@
 //
 // Create an assertion using Expect() and chain validation methods:
 //
-//	result := assert.Expect(model).HasHole(50, 50)
+//	result := assert.Expect(trace, model).HasHole(50, 50)
 //	if !result.Pass() {
 //	    t.Error(result.Error())
 //	}
@@ -16,7 +16,7 @@
 //
 // Assertions can be chained for more specific validations:
 //
-//	result := assert.Expect(model).
+//	result := assert.Expect(trace, model).
 //	    HasHole(50, 50).
 //	    WithDiameter(6.0).
 //	    WithDepth(10.0)
@@ -25,7 +25,7 @@
 //
 // Create assertions with custom tolerance for floating-point comparisons:
 //
-//	result := assert.ExpectWithTolerance(model, 0.001).
+//	result := assert.ExpectWithTolerance(trace, model, 0.001).
 //	    HasHole(50.0, 50.0)
 //
 // # Available Assertions
@@ -34,6 +34,8 @@
 //   - HasHole(x, y) - Verify hole exists at position
 //   - WithDiameter(d) - Filter by diameter
 //   - WithDepth(d) - Filter by depth
+//   - IsPeckDrilled() - Filter peck-drilled holes
+//   - WithPeckCount(n) - Filter by peck count
 //
 // Slot assertions:
 //   - HasSlot(startX, startY, endX, endY) - Verify slot exists
@@ -54,6 +56,6 @@
 //
 //	func TestMyGCode(t *testing.T) {
 //	    model := ... // parse and analyze G-code
-//	    assert.Expect(model).HasHole(50, 50).Assert(t)
+//	    assert.Expect(trace, model).HasHole(50, 50).Assert(t)
 //	}
 package assert

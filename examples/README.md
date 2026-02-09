@@ -61,6 +61,55 @@ Demonstrates complex multi-feature validation:
 GOCODECHECK_UI=1 go test -v ./examples/complete_part
 ```
 
+### 4. Peck Drilling (`examples/peck_drilling`)
+
+Demonstrates peck drilling consolidation:
+- Single hole detected from multiple pecks
+- Peck count assertions
+
+```bash
+GOCODECHECK_UI=1 go test -v ./examples/peck_drilling
+```
+
+### 5. Multi-tool Job (`examples/multi_tool_job`)
+
+Demonstrates tool changes and per-tool validation:
+- T1/T2 tool changes
+- Per-tool hole validation
+
+```bash
+GOCODECHECK_UI=1 go test -v ./examples/multi_tool_job
+```
+
+### 6. Contours and Arcs (`examples/contours_and_arcs`)
+
+Demonstrates arc interpolation validation:
+- G2/G3 arcs
+- Closed contour detection
+
+```bash
+GOCODECHECK_UI=1 go test -v ./examples/contours_and_arcs
+```
+
+### 7. Error Handling (`examples/error_handling`)
+
+Demonstrates warnings and error handling:
+- Missing tool warnings
+- Zero feed warnings
+
+```bash
+GOCODECHECK_UI=1 go test -v ./examples/error_handling
+```
+
+### 8. Tolerance (`examples/tolerance`)
+
+Demonstrates custom tolerance usage:
+- ExpectWithTolerance
+
+```bash
+GOCODECHECK_UI=1 go test -v ./examples/tolerance
+```
+
 ## UI Configuration
 
 The examples demonstrate different UI speed configurations:
@@ -128,3 +177,5 @@ func TestMyGCode(t *testing.T) {
 - `WithDepth(d)` - Hole/feature depth
 - `WithDiameter(d)` - Hole diameter
 - `WithTool(n)` - Tool number used
+- `IsPeckDrilled()` - Peck drilling detection
+- `WithPeckCount(n)` - Peck count filter
